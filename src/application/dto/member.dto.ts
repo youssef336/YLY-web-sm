@@ -1,0 +1,46 @@
+import { z } from 'zod';
+
+/**
+ * Input DTOs. Every boundary crossing (form -> use case) is validated here.
+ * Invalid input never reaches the domain.
+ */
+
+export const AddMemberInputSchema = z.object({
+  name: z.string().trim().min(1, 'Member name is required').max(100),
+});
+export type AddMemberInput = z.infer<typeof AddMemberInputSchema>;
+
+export const UpdateMemberNameInputSchema = z.object({
+  name: z.string().trim().min(1, 'Member name is required').max(100),
+});
+export type UpdateMemberNameInput = z.infer<typeof UpdateMemberNameInputSchema>;
+
+export const TechnicalScoreInputSchema = z.object({
+  score: z.number().min(0).max(50, 'Technical score must be between 0 and 50'),
+});
+export type TechnicalScoreInput = z.infer<typeof TechnicalScoreInputSchema>;
+
+/** Interaction / Respect Hierarchy / Bonus — each a direct 0..10 input. */
+export const CategoryScoresInputSchema = z.object({
+  interaction: z.number().min(0).max(10, 'Interaction must be between 0 and 10'),
+  respectHierarchy: z.number().min(0).max(10, 'Respect Hierarchy must be between 0 and 10'),
+  bonus: z.number().min(0).max(10, 'Bonus must be between 0 and 10'),
+});
+export type CategoryScoresInput = z.infer<typeof CategoryScoresInputSchema>;
+
+const isoDate = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Field Visit: location/event name + date (picked) + attendance score. */
+export const FieldVisitInputSchema = z.object({
+  name: z.string().trim().min(1, 'Location / event name is required').max(200),
+  date: z.string().regex(isoDate, 'A valid date is required'),
+  score: z.union([z.literal(0), z.literal(1)]),
+});
+export type FieldVisitInput = z.infer<typeof FieldVisitInputSchema>;
+
+/** Meeting: date (picked) + attendance score only. */
+export const MeetingInputSchema = z.object({
+  date: z.string().regex(isoDate, 'A valid date is required'),
+  score: z.union([z.literal(0), z.literal(1)]),
+});
+export type MeetingInput = z.infer<typeof MeetingInputSchema>;

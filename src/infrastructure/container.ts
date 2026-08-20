@@ -1,0 +1,80 @@
+import type { LocalMemberRepository } from '@/application/ports/member-repository.port';
+import type { ExcelGenerator } from '@/application/ports/excel-generator.port';
+import type { WhatsAppDeepLinkBuilder } from '@/application/ports/whatsapp-deeplink.port';
+import { IdbLocalRepository } from '@/infrastructure/db/local-repository.idb';
+import { ExceljsInjector } from '@/infrastructure/excel/exceljs-injector';
+import { WaMeDeepLinkBuilder } from '@/infrastructure/whatsapp/wa-deeplink';
+import { APP_CONFIG } from '@/infrastructure/config';
+
+import { AddMemberUseCase } from '@/application/use-cases/add-member.use-case';
+import { ListMembersUseCase } from '@/application/use-cases/list-members.use-case';
+import { GetMemberProfileUseCase } from '@/application/use-cases/get-member-profile.use-case';
+import { UpdateMemberNameUseCase } from '@/application/use-cases/update-member-name.use-case';
+import { DeleteMemberUseCase } from '@/application/use-cases/delete-member.use-case';
+import { UpdateTechnicalScoreUseCase } from '@/application/use-cases/update-technical-score.use-case';
+import { UpdateCategoryScoresUseCase } from '@/application/use-cases/update-category-scores.use-case';
+import { AddFieldVisitUseCase } from '@/application/use-cases/add-field-visit.use-case';
+import { UpdateFieldVisitUseCase } from '@/application/use-cases/update-field-visit.use-case';
+import { RemoveFieldVisitUseCase } from '@/application/use-cases/remove-field-visit.use-case';
+import { AddMeetingUseCase } from '@/application/use-cases/add-meeting.use-case';
+import { UpdateMeetingUseCase } from '@/application/use-cases/update-meeting.use-case';
+import { RemoveMeetingUseCase } from '@/application/use-cases/remove-meeting.use-case';
+import { CalculateLeaderboardUseCase } from '@/application/use-cases/calculate-leaderboard.use-case';
+import { ExportEvaluationToExcelUseCase } from '@/application/use-cases/export-evaluation-to-excel.use-case';
+import { BuildWhatsAppDeepLinkUseCase } from '@/application/use-cases/build-whatsapp-deeplink.use-case';
+
+/**
+ * Composition root (client-side dependency injection).
+ * Wires concrete adapters to ports; the UI only ever talks to use cases.
+ */
+export interface AppContainer {
+  addMember: AddMemberUseCase;
+  listMembers: ListMembersUseCase;
+  getMemberProfile: GetMemberProfileUseCase;
+  updateMemberName: UpdateMemberNameUseCase;
+  deleteMember: DeleteMemberUseCase;
+  updateTechnicalScore: UpdateTechnicalScoreUseCase;
+  updateCategoryScores: UpdateCategoryScoresUseCase;
+  addFieldVisit: AddFieldVisitUseCase;
+  updateFieldVisit: UpdateFieldVisitUseCase;
+  removeFieldVisit: RemoveFieldVisitUseCase;
+  addMeeting: AddMeetingUseCase;
+  updateMeeting: UpdateMeetingUseCase;
+  removeMeeting: RemoveMeetingUseCase;
+  calculateLeaderboard: CalculateLeaderboardUseCase;
+  exportEvaluationToExcel: ExportEvaluationToExcelUseCase;
+  buildWhatsAppDeepLink: BuildWhatsAppDeepLinkUseCase;
+}
+
+export function createContainer(): AppContainer {
+  const repository: LocalMemberRepository = new IdbLocalRepository();
+  const excel: ExcelGenerator = new ExceljsInjector();
+  const whatsapp: WhatsAppDeepLinkBuilder = new WaMeDeepLinkBuilder();
+
+  return {
+    addMember: new AddMemberUseCase(repository),
+    listMembers: new ListMembersUseCase(repository),
+    getMemberProfile: new GetMemberProfileUseCase(repository),
+    updateMemberName: new UpdateMemberNameUseCase(repository),
+    deleteMember: new DeleteMemberUseCase(repository),
+    updateTechnicalScore: new UpdateTechnicalScoreUseCase(repository),
+    updateCategoryScores: new UpdateCategoryScoresUseCase(repository),
+    addFieldVisit: new AddFieldVisitUseCase(repository),
+    updateFieldVisit: new UpdateFieldVisitUseCase(repository),
+    removeFieldVisit: new RemoveFieldVisitUseCase(repository),
+    addMeeting: new AddMeetingUseCase(repository),
+    updateMeeting: new UpdateMeetingUseCase(repository),
+    removeMeeting: new RemoveMeetingUseCase(repository),
+    calculateLeaderboard: new CalculateLeaderboardUseCase(repository),
+    exportEvaluationToExcel: new ExportEvaluationToExcelUseCase(repository, excel),
+    buildWhatsAppDeepLink: new BuildWhatsAppDeepLinkUseCase(repository, whatsapp, APP_CONFIG.WHATSAPP_TO),
+  };
+}
+
+let container: AppContainer | null = null;
+
+/** Returns the shared container (created once per browser session). */
+export function getContainer(): AppContainer {
+  if (!container) container = createContainer();
+  return container;
+}
