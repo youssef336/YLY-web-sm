@@ -50,6 +50,7 @@ export function EntrySection({
   const scoreOptions = isVisit
     ? [
         { value: 1, label: '1 - Complete' },
+        { value: 0.5, label: '0.5 - Excused' },
         { value: 0, label: '0 - Incomplete' },
       ]
     : [
@@ -61,7 +62,9 @@ export function EntrySection({
     isVisit
       ? score === 1
         ? 'Complete'
-        : 'Incomplete'
+        : score === 0.5
+          ? 'Excused'
+          : 'Incomplete'
       : score === 1
         ? 'Attended'
         : score === 0.5

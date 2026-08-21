@@ -172,14 +172,14 @@ export default function MemberProfilePage() {
       mutate(() =>
         getContainer().addFieldVisit.execute(memberId, {
           globalEventId: input.globalEventId,
-          score: input.score as 0 | 1,
+          score: input.score as 0 | 0.5 | 1,
         }),
       ),
     onUpdate: (id: string, input: { score: number }) =>
       mutate(() =>
         getContainer().updateFieldVisit.execute(memberId, id, {
           globalEventId: '',
-          score: input.score as 0 | 1,
+          score: input.score as 0 | 0.5 | 1,
         }),
       ),
     onRemove: (id: string) => mutate(() => getContainer().removeFieldVisit.execute(id)),

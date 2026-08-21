@@ -1,4 +1,4 @@
-export type FieldVisitScore = 0 | 1;
+export type FieldVisitScore = 0 | 0.5 | 1;
 
 /**
  * A member's field visit entry — references a GlobalFieldVisit by ID.
@@ -14,7 +14,7 @@ export interface FieldVisit {
   memberId: string;
   /** References GlobalFieldVisit.id — determines the column slot and header label. */
   globalEventId: string;
-  /** 1 = complete, 0 = incomplete. */
+  /** 1 = complete, 0.5 = excused/partial, 0 = incomplete. */
   score: FieldVisitScore;
   /** Assigned template column index (0-14 -> D..R). */
   slot: number;
