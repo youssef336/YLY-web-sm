@@ -7,7 +7,7 @@ import {
   columnLetterToIndex,
 } from './smmember-layout';
 
-const { columns, firstDataRow, lastDataRow } = SMMEMBER_TEMPLATE;
+const { columns, headerRow, firstDataRow, lastDataRow } = SMMEMBER_TEMPLATE;
 const nameCol = columnLetterToIndex(columns.name);
 const technicalCol = columnLetterToIndex(columns.technical);
 const visitsStartCol = columnLetterToIndex(columns.visitsStart);
@@ -49,6 +49,28 @@ function cellToString(value: ExcelJS.CellValue): string | null {
     return r != null ? String(r) : null;
   }
   return null;
+}
+
+interface ExtractedHeaders {
+  visits: (string | null)[];
+  meetings: (string | null)[];
+}
+
+function extractHeadersFromWorkbook(workbook: ExcelJS.Workbook): ExtractedHeaders {
+  const sheet = workbook.getWorksheet(SMMEMBER_TEMPLATE.sheetName);
+  const empty: ExtractedHeaders = { visits: Array(MAX_FIELD_VISITS).fill(null), meetings: Array(MAX_MEETINGS).fill(null) };
+  if (!sheet) return empty;
+
+  const row = sheet.getRow(headerRow);
+  const visits: (string | null)[] = [];
+  for (let i = 0; i < MAX_FIELD_VISITS; i++) {
+    visits.push(cellToString(row.getCell(visitsStartCol + i).value));
+  }
+  const meetings: (string | null)[] = [];
+  for (let i = 0; i < MAX_MEETINGS; i++) {
+    meetings.push(cellToString(row.getCell(meetingsStartCol + i).value));
+  }
+  return { visits, meetings };
 }
 
 function extractRowsFromWorkbook(workbook: ExcelJS.Workbook): ExtractedMemberRow[] {
@@ -106,10 +128,23 @@ export async function mergeExcelFiles(files: File[]): Promise<Uint8Array> {
   if (!masterSheet) throw new Error(`Sheet "${SMMEMBER_TEMPLATE.sheetName}" not found in template`);
 
   const allRows: ExtractedMemberRow[] = [];
+  const mergedVisitHeaders: (string | null)[] = Array(MAX_FIELD_VISITS).fill(null);
+  const mergedMeetingHeaders: (string | null)[] = Array(MAX_MEETINGS).fill(null);
+
   for (const file of files) {
     const buffer = await file.arrayBuffer();
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
+
+    // Extract and merge Row 3 headers — first non-empty value per slot wins.
+    const headers = extractHeadersFromWorkbook(wb);
+    for (let i = 0; i < MAX_FIELD_VISITS; i++) {
+      if (!mergedVisitHeaders[i] && headers.visits[i]) mergedVisitHeaders[i] = headers.visits[i];
+    }
+    for (let i = 0; i < MAX_MEETINGS; i++) {
+      if (!mergedMeetingHeaders[i] && headers.meetings[i]) mergedMeetingHeaders[i] = headers.meetings[i];
+    }
+
     allRows.push(...extractRowsFromWorkbook(wb));
   }
 
@@ -141,6 +176,15 @@ export async function mergeExcelFiles(files: File[]): Promise<Uint8Array> {
     row.getCell(interactionCol).value = data.interaction;
     row.getCell(respectHierarchyCol).value = data.respectHierarchy;
     row.getCell(bonusCol).value = data.bonus;
+  }
+
+  // Write merged headers to Row 3 — only non-empty slots.
+  const headerRowCells = masterSheet.getRow(headerRow);
+  for (let i = 0; i < MAX_FIELD_VISITS; i++) {
+    if (mergedVisitHeaders[i]) headerRowCells.getCell(visitsStartCol + i).value = mergedVisitHeaders[i];
+  }
+  for (let i = 0; i < MAX_MEETINGS; i++) {
+    if (mergedMeetingHeaders[i]) headerRowCells.getCell(meetingsStartCol + i).value = mergedMeetingHeaders[i];
   }
 
   masterSheet.eachRow((row) => {
