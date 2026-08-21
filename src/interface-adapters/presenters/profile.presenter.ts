@@ -14,8 +14,8 @@ export interface ProfileView {
     createdAt: string;
   };
   technical: number;
-  fieldVisits: Array<{ id: string; name: string; date: string; score: number }>;
-  meetings: Array<{ id: string; date: string; score: number }>;
+  fieldVisits: Array<{ id: string; globalEventId: string; name: string; date: string; score: number }>;
+  meetings: Array<{ id: string; globalEventId: string; date: string; score: number }>;
   scores: {
     interaction: number;
     respectHierarchy: number;
@@ -53,6 +53,7 @@ export function profileToView(
       const global = globalVisitMap.get(fv.globalEventId);
       return {
         id: fv.id,
+        globalEventId: fv.globalEventId,
         name: global?.name ?? '(deleted event)',
         date: global?.date ?? '',
         score: fv.score,
@@ -62,6 +63,7 @@ export function profileToView(
       const global = globalMeetingMap.get(m.globalEventId);
       return {
         id: m.id,
+        globalEventId: m.globalEventId,
         date: global?.date ?? '(deleted event)',
         score: m.score,
       };

@@ -6,6 +6,7 @@ export type EntryScore = 0 | 0.5 | 1;
 
 export interface EntryItem {
   id: string;
+  globalEventId: string;
   name?: string;
   date: string;
   score: number;

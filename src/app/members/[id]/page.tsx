@@ -157,22 +157,33 @@ export default function MemberProfilePage() {
     );
   }
 
+  // Filter out events already added to this member's profile
+  const usedVisitIds = new Set(profile.fieldVisits.map((fv) => fv.globalEventId));
+  const usedMeetingIds = new Set(profile.meetings.map((m) => m.globalEventId));
+
   const visitGlobalOptions: GlobalEventOption[] = [...globalVisits]
+    .filter((gv) => !usedVisitIds.has(gv.id))
     .sort((a, b) => b.date.localeCompare(a.date))
     .map((gv) => ({ id: gv.id, label: `${gv.name} - ${gv.date}` }));
 
   const meetingGlobalOptions: GlobalEventOption[] = [...globalMeetings]
+    .filter((gm) => !usedMeetingIds.has(gm.id))
     .sort((a, b) => b.date.localeCompare(a.date))
     .map((gm) => ({ id: gm.id, label: gm.date }));
 
   const fieldVisitCallbacks = {
-    onAdd: (input: { globalEventId: string; score: number }) =>
-      mutate(() =>
+    onAdd: (input: { globalEventId: string; score: number }) => {
+      if (usedVisitIds.has(input.globalEventId)) {
+        setError('This field visit has already been added for this member.');
+        return Promise.resolve();
+      }
+      return mutate(() =>
         getContainer().addFieldVisit.execute(memberId, {
           globalEventId: input.globalEventId,
           score: input.score as 0 | 0.5 | 1,
         }),
-      ),
+      );
+    },
     onUpdate: (id: string, input: { score: number }) =>
       mutate(() =>
         getContainer().updateFieldVisit.execute(memberId, id, {
@@ -184,13 +195,18 @@ export default function MemberProfilePage() {
   };
 
   const meetingCallbacks = {
-    onAdd: (input: { globalEventId: string; score: number }) =>
-      mutate(() =>
+    onAdd: (input: { globalEventId: string; score: number }) => {
+      if (usedMeetingIds.has(input.globalEventId)) {
+        setError('This meeting has already been added for this member.');
+        return Promise.resolve();
+      }
+      return mutate(() =>
         getContainer().addMeeting.execute(memberId, {
           globalEventId: input.globalEventId,
           score: input.score as 0 | 0.5 | 1,
         }),
-      ),
+      );
+    },
     onUpdate: (id: string, input: { score: number }) =>
       mutate(() =>
         getContainer().updateMeeting.execute(memberId, id, {
