@@ -1,9 +1,9 @@
 /* Offline-first service worker: cache app shell + bundled template, serve
    from cache when the network is unavailable. */
-const CACHE_NAME = 'member-eval-v4';
+const CACHE_NAME = 'member-eval-v5';
 const PRECACHE = [
   '/',
-  '/templates/SMMEMBER .xlsx',
+  '/exel need/SMMEMBER .xlsx',
   '/icon.svg',
   '/manifest.webmanifest',
 ];
@@ -32,7 +32,7 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache the Excel template at runtime — it has cache-busting params
   // and must always come from the network so formula updates take effect.
-  if (request.url.includes('/templates/') && request.url.endsWith('.xlsx')) {
+  if (request.url.includes('/exel need/') && request.url.endsWith('.xlsx')) {
     event.respondWith(fetch(request));
     return;
   }
