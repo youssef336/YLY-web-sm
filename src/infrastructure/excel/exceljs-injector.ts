@@ -45,10 +45,18 @@ export class ExceljsInjector implements ExcelGenerator {
   }): Promise<Uint8Array> {
     const { profiles, globalFieldVisits, globalMeetings } = input;
 
-    const templateUrl = new URL(SMMEMBER_TEMPLATE.filePath, window.location.origin).href;
+    const cacheBust = new Date().getTime();
+    const templateUrl = `${new URL(SMMEMBER_TEMPLATE.filePath, window.location.origin).href}?v=${cacheBust}`;
     let templateBytes: ArrayBuffer;
     try {
-      const res = await fetch(templateUrl, { cache: 'no-cache' });
+      const res = await fetch(templateUrl, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0',
+        },
+      });
       if (!res.ok) throw new Error(`template not found (HTTP ${res.status})`);
       templateBytes = await res.arrayBuffer();
     } catch (cause) {
