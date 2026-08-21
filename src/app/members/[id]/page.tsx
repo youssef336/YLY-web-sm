@@ -157,15 +157,13 @@ export default function MemberProfilePage() {
     );
   }
 
-  const visitGlobalOptions: GlobalEventOption[] = globalVisits.map((gv) => ({
-    id: gv.id,
-    label: `${gv.name} - ${gv.date}`,
-  }));
+  const visitGlobalOptions: GlobalEventOption[] = [...globalVisits]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((gv) => ({ id: gv.id, label: `${gv.name} - ${gv.date}` }));
 
-  const meetingGlobalOptions: GlobalEventOption[] = globalMeetings.map((gm) => ({
-    id: gm.id,
-    label: gm.date,
-  }));
+  const meetingGlobalOptions: GlobalEventOption[] = [...globalMeetings]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map((gm) => ({ id: gm.id, label: gm.date }));
 
   const fieldVisitCallbacks = {
     onAdd: (input: { globalEventId: string; score: number }) =>
