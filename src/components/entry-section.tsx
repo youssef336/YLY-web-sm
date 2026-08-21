@@ -2,6 +2,8 @@
 
 import { useState, type FormEvent, type ReactNode } from 'react';
 
+export type EntryScore = 0 | 0.5 | 1;
+
 export interface EntryItem {
   id: string;
   name?: string;
@@ -52,6 +54,7 @@ export function EntrySection({
       ]
     : [
         { value: 1, label: '1 - Attended' },
+        { value: 0.5, label: '0.5 - Excused' },
         { value: 0, label: '0 - Absent' },
       ];
   const statusLabel = (score: number): string =>
@@ -61,7 +64,9 @@ export function EntrySection({
         : 'Incomplete'
       : score === 1
         ? 'Attended'
-        : 'Absent';
+        : score === 0.5
+          ? 'Excused'
+          : 'Absent';
 
   const [addGlobalEventId, setAddGlobalEventId] = useState('');
   const [addScore, setAddScore] = useState(1);
@@ -75,7 +80,7 @@ export function EntrySection({
     if (!addGlobalEventId || atLimit) return;
     setBusy(true);
     try {
-      await onAdd({ globalEventId: addGlobalEventId, score: addScore as 0 | 1 });
+      await onAdd({ globalEventId: addGlobalEventId, score: addScore as EntryScore });
       setAddGlobalEventId('');
       setAddScore(1);
     } finally {
@@ -93,7 +98,7 @@ export function EntrySection({
     if (!editingId) return;
     setBusy(true);
     try {
-      await onUpdate(editingId, { score: editScore as 0 | 1 });
+      await onUpdate(editingId, { score: editScore as EntryScore });
       setEditingId(null);
     } finally {
       setBusy(false);

@@ -1,4 +1,4 @@
-export type MeetingScore = 0 | 1;
+export type MeetingScore = 0 | 0.5 | 1;
 
 /**
  * A member's meeting entry — references a GlobalMeeting by ID.
@@ -14,7 +14,7 @@ export interface Meeting {
   memberId: string;
   /** References GlobalMeeting.id — determines the column slot and header label. */
   globalEventId: string;
-  /** 1 = attended, 0 = absent. */
+  /** 1 = attended, 0.5 = excused, 0 = absent. */
   score: MeetingScore;
   /** Assigned template column index (0-14 -> U..AI). */
   slot: number;

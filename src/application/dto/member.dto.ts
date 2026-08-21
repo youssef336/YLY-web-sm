@@ -53,6 +53,6 @@ export type FieldVisitInput = z.infer<typeof FieldVisitInputSchema>;
 /** Meeting entry: references a global event + attendance score. */
 export const MeetingInputSchema = z.object({
   globalEventId: z.string().min(1, 'Please select a meeting'),
-  score: z.union([z.literal(0), z.literal(1)]),
+  score: z.union([z.literal(0), z.literal(0.5), z.literal(1)]),
 });
 export type MeetingInput = z.infer<typeof MeetingInputSchema>;
