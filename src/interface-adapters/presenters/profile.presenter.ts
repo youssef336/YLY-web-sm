@@ -1,9 +1,11 @@
 import type { MemberProfile } from '@/domain/entities/member-profile';
+import type { GlobalFieldVisit } from '@/domain/entities/global-field-visit';
+import type { GlobalMeeting } from '@/domain/entities/global-meeting';
 
 /**
  * Presenter (interface adapter): maps a domain MemberProfile aggregate to the
- * shape consumed by the Evaluation Profile screen. Scores always come from
- * the domain scoring rules so the on-screen total matches the Excel export.
+ * shape consumed by the Evaluation Profile screen. Global events are resolved
+ * to their name/date so the UI never needs to know about globalEventId.
  */
 export interface ProfileView {
   member: {
@@ -32,7 +34,14 @@ export interface ProfileView {
   };
 }
 
-export function profileToView(profile: MemberProfile): ProfileView {
+export function profileToView(
+  profile: MemberProfile,
+  globalFieldVisits: GlobalFieldVisit[],
+  globalMeetings: GlobalMeeting[],
+): ProfileView {
+  const globalVisitMap = new Map(globalFieldVisits.map((g) => [g.id, g]));
+  const globalMeetingMap = new Map(globalMeetings.map((g) => [g.id, g]));
+
   return {
     member: {
       id: profile.member.id,
@@ -40,17 +49,23 @@ export function profileToView(profile: MemberProfile): ProfileView {
       createdAt: profile.member.createdAt.toISOString(),
     },
     technical: profile.technical?.score ?? 0,
-    fieldVisits: profile.fieldVisits.map((fv) => ({
-      id: fv.id,
-      name: fv.name,
-      date: fv.date,
-      score: fv.score,
-    })),
-    meetings: profile.meetings.map((m) => ({
-      id: m.id,
-      date: m.date,
-      score: m.score,
-    })),
+    fieldVisits: profile.fieldVisits.map((fv) => {
+      const global = globalVisitMap.get(fv.globalEventId);
+      return {
+        id: fv.id,
+        name: global?.name ?? '(deleted event)',
+        date: global?.date ?? '',
+        score: fv.score,
+      };
+    }),
+    meetings: profile.meetings.map((m) => {
+      const global = globalMeetingMap.get(m.globalEventId);
+      return {
+        id: m.id,
+        date: global?.date ?? '(deleted event)',
+        score: m.score,
+      };
+    }),
     scores: {
       interaction: profile.scores?.interaction ?? 0,
       respectHierarchy: profile.scores?.respectHierarchy ?? 0,

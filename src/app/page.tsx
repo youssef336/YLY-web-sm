@@ -8,6 +8,8 @@ import {
   leaderboardToViews,
   type LeaderboardMemberView,
 } from '@/interface-adapters/presenters/leaderboard.presenter';
+import type { GlobalFieldVisit } from '@/domain/entities/global-field-visit';
+import type { GlobalMeeting } from '@/domain/entities/global-meeting';
 import { BelloLogo } from '@/components/bello-logo';
 import { GradeBadge } from '@/components/grade-badge';
 
@@ -20,6 +22,8 @@ function rankClass(rank: number): string {
 
 const tableHead =
   'px-3 py-2.5 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400 whitespace-nowrap';
+const inputBase =
+  'rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-violet-400/60 disabled:cursor-not-allowed disabled:opacity-50';
 
 export default function HomePage() {
   const router = useRouter();
@@ -30,18 +34,40 @@ export default function HomePage() {
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Global events
+  const [globalVisits, setGlobalVisits] = useState<GlobalFieldVisit[]>([]);
+  const [globalMeetings, setGlobalMeetings] = useState<GlobalMeeting[]>([]);
+  const [visitName, setVisitName] = useState('');
+  const [visitDate, setVisitDate] = useState('');
+  const [meetingDate, setMeetingDate] = useState('');
+  const [addingVisit, setAddingVisit] = useState(false);
+  const [addingMeeting, setAddingMeeting] = useState(false);
+  const [eventsOpen, setEventsOpen] = useState(false);
+
   const load = useCallback(async () => {
-    const entries = await getContainer().calculateLeaderboard.execute();
+    const [entries, gv, gm] = await Promise.all([
+      getContainer().calculateLeaderboard.execute(),
+      getContainer().listGlobalFieldVisits.execute(),
+      getContainer().listGlobalMeetings.execute(),
+    ]);
     setMembers(leaderboardToViews(entries));
+    setGlobalVisits(gv);
+    setGlobalMeetings(gm);
     setLoading(false);
   }, []);
 
   useEffect(() => {
     let active = true;
-    getContainer()
-      .calculateLeaderboard.execute()
-      .then((entries) => {
-        if (active) setMembers(leaderboardToViews(entries));
+    Promise.all([
+      getContainer().calculateLeaderboard.execute(),
+      getContainer().listGlobalFieldVisits.execute(),
+      getContainer().listGlobalMeetings.execute(),
+    ])
+      .then(([entries, gv, gm]) => {
+        if (!active) return;
+        setMembers(leaderboardToViews(entries));
+        setGlobalVisits(gv);
+        setGlobalMeetings(gm);
       })
       .catch(() => {
         /* keep current list */
@@ -67,6 +93,61 @@ export default function HomePage() {
       setError(err instanceof Error ? err.message : 'Failed to add member');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function addGlobalVisit(e: FormEvent): Promise<void> {
+    e.preventDefault();
+    if (!visitName.trim() || !visitDate) return;
+    setAddingVisit(true);
+    setError(null);
+    try {
+      await getContainer().createGlobalFieldVisit.execute({ name: visitName.trim(), date: visitDate });
+      setVisitName('');
+      setVisitDate('');
+      const gv = await getContainer().listGlobalFieldVisits.execute();
+      setGlobalVisits(gv);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add field visit');
+    } finally {
+      setAddingVisit(false);
+    }
+  }
+
+  async function addGlobalMeeting(e: FormEvent): Promise<void> {
+    e.preventDefault();
+    if (!meetingDate) return;
+    setAddingMeeting(true);
+    setError(null);
+    try {
+      await getContainer().createGlobalMeeting.execute({ date: meetingDate });
+      setMeetingDate('');
+      const gm = await getContainer().listGlobalMeetings.execute();
+      setGlobalMeetings(gm);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to add meeting');
+    } finally {
+      setAddingMeeting(false);
+    }
+  }
+
+  async function deleteGlobalVisit(id: string): Promise<void> {
+    try {
+      await getContainer().deleteGlobalFieldVisit.execute(id);
+      const gv = await getContainer().listGlobalFieldVisits.execute();
+      setGlobalVisits(gv);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  }
+
+  async function deleteGlobalMeeting(id: string): Promise<void> {
+    try {
+      await getContainer().deleteGlobalMeeting.execute(id);
+      const gm = await getContainer().listGlobalMeetings.execute();
+      setGlobalMeetings(gm);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to delete');
     }
   }
 
@@ -103,11 +184,12 @@ export default function HomePage() {
         </button>
       </header>
 
+      {/* Add member */}
       <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
         <h2 className="mb-3 text-lg font-bold text-white">Add member</h2>
         <form className="flex flex-wrap items-center gap-2" onSubmit={addMember}>
           <input
-            className="min-w-48 flex-1 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-violet-400/60"
+            className={`${inputBase} min-w-48 flex-1`}
             placeholder="Member name"
             value={name}
             maxLength={100}
@@ -122,9 +204,129 @@ export default function HomePage() {
             {submitting ? 'Adding…' : 'Add'}
           </button>
         </form>
-        {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
       </section>
 
+      {/* Global events toggle */}
+      <section className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur">
+        <button
+          type="button"
+          onClick={() => setEventsOpen(!eventsOpen)}
+          className="flex w-full items-center justify-between p-5 text-left"
+        >
+          <div>
+            <h2 className="text-lg font-bold text-white">Global Events</h2>
+            <p className="text-sm text-slate-400">
+              {globalVisits.length} field visit{globalVisits.length !== 1 ? 's' : ''} ·{' '}
+              {globalMeetings.length} meeting{globalMeetings.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+          <span className="text-slate-400">{eventsOpen ? '▾' : '▸'}</span>
+        </button>
+
+        {eventsOpen && (
+          <div className="space-y-4 border-t border-white/5 px-5 pb-5 pt-4">
+            {/* Add field visit */}
+            <form className="flex flex-wrap items-center gap-2" onSubmit={addGlobalVisit}>
+              <input
+                className={`${inputBase} min-w-36 flex-1`}
+                placeholder="Visit name"
+                value={visitName}
+                maxLength={100}
+                required
+                disabled={addingVisit}
+                onChange={(e) => setVisitName(e.target.value)}
+              />
+              <input
+                className={inputBase}
+                type="date"
+                value={visitDate}
+                required
+                disabled={addingVisit}
+                onChange={(e) => setVisitDate(e.target.value)}
+              />
+              <button
+                type="submit"
+                disabled={addingVisit || !visitName.trim() || !visitDate}
+                className="rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-emerald-950/40 transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {addingVisit ? 'Adding…' : 'Add visit'}
+              </button>
+            </form>
+
+            {/* Add meeting */}
+            <form className="flex flex-wrap items-center gap-2" onSubmit={addGlobalMeeting}>
+              <input
+                className={inputBase}
+                type="date"
+                value={meetingDate}
+                required
+                disabled={addingMeeting}
+                onChange={(e) => setMeetingDate(e.target.value)}
+              />
+              <button
+                type="submit"
+                disabled={addingMeeting || !meetingDate}
+                className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-950/40 transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {addingMeeting ? 'Adding…' : 'Add meeting'}
+              </button>
+            </form>
+
+            {/* Field visits list */}
+            {globalVisits.length > 0 && (
+              <div>
+                <h3 className="mb-1.5 text-sm font-semibold text-slate-300">Field Visits</h3>
+                <ul className="space-y-1">
+                  {globalVisits.map((g) => (
+                    <li key={g.id} className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
+                      <span>
+                        <span className="font-medium text-slate-100">{g.name}</span>
+                        <span className="ml-2 text-slate-400">{g.date}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void deleteGlobalVisit(g.id)}
+                        className="rounded-lg px-2 py-1 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/15"
+                      >
+                        Delete
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {/* Meetings list */}
+            {globalMeetings.length > 0 && (
+              <div>
+                <h3 className="mb-1.5 text-sm font-semibold text-slate-300">Meetings</h3>
+                <ul className="space-y-1">
+                  {globalMeetings.map((g) => (
+                    <li key={g.id} className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
+                      <span className="text-slate-100">{g.date}</span>
+                      <button
+                        type="button"
+                        onClick={() => void deleteGlobalMeeting(g.id)}
+                        className="rounded-lg px-2 py-1 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/15"
+                      >
+                        Delete
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {globalVisits.length === 0 && globalMeetings.length === 0 && (
+              <p className="text-center text-sm text-slate-500">No global events yet. Add one above.</p>
+            )}
+          </div>
+        )}
+      </section>
+
+      {error && <p className="mt-3 text-sm text-rose-300">{error}</p>}
+
+      {/* Leaderboard */}
       <section className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
         <h2 className="mb-3 text-lg font-bold text-white">Leaderboard</h2>
         {loading ? (

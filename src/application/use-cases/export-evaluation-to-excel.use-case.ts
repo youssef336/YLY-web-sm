@@ -4,19 +4,11 @@ import type { MemberProfile } from '@/domain/entities/member-profile';
 
 /**
  * Compiles ALL members' evaluation data into the SMMEMBER Excel template
- * (one member per registry row, ranked by total score descending, matching
- * the template's own AS sort helper).
+ * (one member per registry row, ranked by total score descending).
  *
- * Mapping contract (template -> domain):
- *   - Column A  <-> Member name
- *   - Column B  <-> Technical Evaluation /50
- *   - Columns D..R (15) <-> Field Visit scores (0/1)
- *   - Columns U..AI (15)<-> Meeting scores (0/1)
- *   - Columns AK, AL, AM <-> aggregated Tasks score (Interaction / Respect / Bonus)
- *
- * The template's formulas compute S (Field Visits /20), AJ (Meetings /10),
- * AN (Total /110), AO (%) and AP (Grade) when the file is opened, so this
- * injector only writes the raw data cells. Returns the .xlsx bytes.
+ * Fetches global events so the injector can write header labels (row 3)
+ * from the global event names/dates. Only data-entry cells are written;
+ * formula columns (C, T, S, AJ, AN, AO, AP) are never touched.
  */
 export class ExportEvaluationToExcelUseCase {
   constructor(
@@ -35,6 +27,11 @@ export class ExportEvaluationToExcelUseCase {
       }),
     );
 
-    return this.excel.generateAll(profiles);
+    const [globalFieldVisits, globalMeetings] = await Promise.all([
+      this.repository.listGlobalFieldVisits(),
+      this.repository.listGlobalMeetings(),
+    ]);
+
+    return this.excel.generateAll({ profiles, globalFieldVisits, globalMeetings });
   }
 }

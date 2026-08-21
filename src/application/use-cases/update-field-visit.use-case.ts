@@ -11,10 +11,6 @@ export class UpdateFieldVisitUseCase {
     const data = parseOrThrow(FieldVisitInputSchema, input);
     const member = await this.repository.findById(memberId);
     if (!member) throw new MemberNotFoundError(memberId);
-    await this.repository.updateFieldVisit(entryId, {
-      name: data.name,
-      date: data.date,
-      score: data.score,
-    });
+    await this.repository.updateFieldVisit(entryId, { score: data.score });
   }
 }

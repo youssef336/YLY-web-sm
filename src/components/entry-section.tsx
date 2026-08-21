@@ -9,25 +9,24 @@ export interface EntryItem {
   score: number;
 }
 
-export interface EntryFormInput {
-  name?: string;
-  date: string;
-  score: number;
+export interface GlobalEventOption {
+  id: string;
+  label: string;
 }
 
 const inputBase =
   'rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-violet-400/60 disabled:cursor-not-allowed disabled:opacity-50';
 
 /**
- * Field Visits (kind="visit") and Meetings (kind="meeting") share one editable
- * list. A visit collects a Location/Event name + a date; a meeting only a date.
- * The date picker is a native <input type="date"> so it works offline.
+ * Editable list for Field Visits / Meetings. The add form uses a dropdown of
+ * global events (created on the Home page) instead of free-text inputs.
  */
 export function EntrySection({
   title,
   description,
   kind,
   entries,
+  globalEvents,
   max,
   disabled,
   onAdd,
@@ -38,14 +37,14 @@ export function EntrySection({
   description: ReactNode;
   kind: 'visit' | 'meeting';
   entries: EntryItem[];
+  globalEvents: GlobalEventOption[];
   max?: number;
   disabled?: boolean;
-  onAdd: (input: EntryFormInput) => Promise<unknown>;
-  onUpdate: (id: string, input: EntryFormInput) => Promise<unknown>;
+  onAdd: (input: { globalEventId: string; score: number }) => Promise<unknown>;
+  onUpdate: (id: string, input: { score: number }) => Promise<unknown>;
   onRemove: (id: string) => Promise<unknown>;
 }) {
   const isVisit = kind === 'visit';
-  // 1 = complete/attended, 0 = incomplete/absent (values are NOT inverted).
   const scoreOptions = isVisit
     ? [
         { value: 1, label: '1 - Complete' },
@@ -63,28 +62,22 @@ export function EntrySection({
       : score === 1
         ? 'Attended'
         : 'Absent';
-  const emptyForm = (): EntryFormInput => ({ name: '', date: '', score: 1 });
 
-  const [add, setAdd] = useState<EntryFormInput>(emptyForm);
+  const [addGlobalEventId, setAddGlobalEventId] = useState('');
+  const [addScore, setAddScore] = useState(1);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [edit, setEdit] = useState<EntryFormInput>(emptyForm);
+  const [editScore, setEditScore] = useState(1);
   const [busy, setBusy] = useState(false);
   const atLimit = max != null && entries.length >= max;
 
-  function setAddField<K extends keyof EntryFormInput>(key: K, value: EntryFormInput[K]): void {
-    setAdd((f) => ({ ...f, [key]: value }));
-  }
-  function setEditField<K extends keyof EntryFormInput>(key: K, value: EntryFormInput[K]): void {
-    setEdit((f) => ({ ...f, [key]: value }));
-  }
-
   async function handleAdd(e: FormEvent): Promise<void> {
     e.preventDefault();
-    if (atLimit || !add.date || (isVisit && !add.name?.trim())) return;
+    if (!addGlobalEventId || atLimit) return;
     setBusy(true);
     try {
-      await onAdd({ ...add, name: add.name?.trim() || undefined, score: Number(add.score) });
-      setAdd(emptyForm());
+      await onAdd({ globalEventId: addGlobalEventId, score: addScore as 0 | 1 });
+      setAddGlobalEventId('');
+      setAddScore(1);
     } finally {
       setBusy(false);
     }
@@ -92,56 +85,20 @@ export function EntrySection({
 
   function startEdit(item: EntryItem): void {
     setEditingId(item.id);
-    setEdit({ name: item.name ?? '', date: item.date, score: item.score });
+    setEditScore(item.score);
   }
 
   async function handleEdit(e: FormEvent): Promise<void> {
     e.preventDefault();
-    if (!editingId || !edit.date || (isVisit && !edit.name?.trim())) return;
+    if (!editingId) return;
     setBusy(true);
     try {
-      await onUpdate(editingId, { ...edit, name: edit.name?.trim() || undefined, score: Number(edit.score) });
+      await onUpdate(editingId, { score: editScore as 0 | 1 });
       setEditingId(null);
     } finally {
       setBusy(false);
     }
   }
-
-  const dateField = (
-    value: string,
-    onChange: (value: string) => void,
-    required = true,
-  ) => (
-    <input
-      type="date"
-      className={inputBase}
-      value={value}
-      required={required}
-      disabled={disabled || busy}
-      onChange={(e) => onChange(e.target.value)}
-      aria-label="Date"
-    />
-  );
-
-  const scoreSelect = (
-    value: number,
-    onChange: (value: number) => void,
-    disabledNow = false,
-  ) => (
-    <select
-      className={`${inputBase} cursor-pointer`}
-      value={value}
-      disabled={disabled || busy || disabledNow}
-      onChange={(e) => onChange(Number(e.target.value))}
-      aria-label="Score"
-    >
-      {scoreOptions.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  );
 
   return (
     <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
@@ -149,27 +106,50 @@ export function EntrySection({
       <p className="mb-4 text-sm text-slate-400">{description}</p>
 
       <form className="flex flex-wrap items-center gap-2" onSubmit={handleAdd}>
-        {isVisit && (
-          <input
-            className={`${inputBase} min-w-44 flex-1`}
-            placeholder="Location / event name"
-            value={add.name ?? ''}
-            maxLength={200}
-            required
-            disabled={disabled || busy || atLimit}
-            onChange={(e) => setAddField('name', e.target.value)}
-          />
-        )}
-        {dateField(add.date, (v) => setAddField('date', v), false)}
-        {scoreSelect(add.score, (v) => setAddField('score', v), false)}
+        <select
+          className={`${inputBase} min-w-48 flex-1 cursor-pointer`}
+          value={addGlobalEventId}
+          disabled={disabled || busy || atLimit}
+          onChange={(e) => setAddGlobalEventId(e.target.value)}
+          aria-label={isVisit ? 'Select field visit' : 'Select meeting'}
+          required
+        >
+          <option value="">{isVisit ? 'Select a field visit…' : 'Select a meeting…'}</option>
+          {globalEvents.map((g) => (
+            <option key={g.id} value={g.id}>
+              {g.label}
+            </option>
+          ))}
+        </select>
+
+        <select
+          className={`${inputBase} cursor-pointer`}
+          value={addScore}
+          disabled={disabled || busy || atLimit}
+          onChange={(e) => setAddScore(Number(e.target.value))}
+          aria-label="Score"
+        >
+          {scoreOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+
         <button
           type="submit"
-          disabled={disabled || busy || atLimit}
+          disabled={disabled || busy || atLimit || !addGlobalEventId}
           className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {busy ? 'Saving…' : isVisit ? 'Add visit' : 'Add meeting'}
         </button>
       </form>
+
+      {globalEvents.length === 0 && (
+        <p className="mt-2 text-xs text-amber-300">
+          No global {isVisit ? 'field visits' : 'meetings'} created yet. Add them from the Home page.
+        </p>
+      )}
 
       {atLimit && (
         <p className="mt-2 text-xs text-amber-300">Maximum {max} {isVisit ? 'visits' : 'meetings'} reached.</p>
@@ -185,18 +165,23 @@ export function EntrySection({
             editingId === item.id ? (
               <li key={item.id}>
                 <form className="flex flex-wrap items-center gap-2" onSubmit={handleEdit}>
-                  {isVisit && (
-                    <input
-                      className={`${inputBase} min-w-44 flex-1`}
-                      value={edit.name ?? ''}
-                      maxLength={200}
-                      required
-                      disabled={disabled || busy}
-                      onChange={(e) => setEditField('name', e.target.value)}
-                    />
-                  )}
-                  {dateField(edit.date, (v) => setEditField('date', v))}
-                  {scoreSelect(edit.score, (v) => setEditField('score', v))}
+                  <span className="min-w-0 flex-1 truncate text-sm text-slate-300">
+                    {isVisit && item.name && <span className="font-medium text-slate-100">{item.name} — </span>}
+                    {item.date}
+                  </span>
+                  <select
+                    className={`${inputBase} cursor-pointer`}
+                    value={editScore}
+                    disabled={disabled || busy}
+                    onChange={(e) => setEditScore(Number(e.target.value))}
+                    aria-label="Score"
+                  >
+                    {scoreOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
                   <button
                     type="submit"
                     disabled={disabled || busy}

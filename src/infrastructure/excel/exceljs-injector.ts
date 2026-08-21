@@ -1,10 +1,10 @@
 import ExcelJS from 'exceljs';
 import type { ExcelGenerator } from '@/application/ports/excel-generator.port';
 import type { MemberProfile } from '@/domain/entities/member-profile';
-import type { FieldVisit } from '@/domain/entities/field-visit';
-import { fieldVisitHeaderLabel } from '@/domain/entities/field-visit';
-import type { Meeting } from '@/domain/entities/meeting';
-import { meetingHeaderLabel } from '@/domain/entities/meeting';
+import type { GlobalFieldVisit } from '@/domain/entities/global-field-visit';
+import type { GlobalMeeting } from '@/domain/entities/global-meeting';
+import { fieldVisitHeaderLabel } from '@/domain/entities/global-field-visit';
+import { meetingHeaderLabel } from '@/domain/entities/global-meeting';
 import {
   SMMEMBER_TEMPLATE,
   MAX_FIELD_VISITS,
@@ -29,20 +29,22 @@ const bonusCol = columnLetterToIndex(columns.bonus);
  *   - Field Visit / Meeting labels are written to the HEADER row (row 3 — the
  *     empty light-yellow row ABOVE the dark-yellow numbering row 4), one label
  *     per shared event column (D..R for visits, U..AI for meetings).
- *     A visit's header is "Name - Date"; a meeting's header is just the date.
- *     The template's static column numbers in row 4 are never touched.
  *   - Each member's 0/1 scores are written to that member's row, under the
  *     same column (slot) the label was written to.
  *   - Interaction / Respect Hierarchy / Bonus are written directly to AK / AL /
  *     AM.
  *   - ONLY data-entry cells are written (A, B, D..R, U..AI, AK/AL/AM). The
- *     template's FORMULA columns — C (Field Visits Entered), T (Meetings
- *     Entered), S, AJ, AN, AO, AP — are never touched, so Excel recalculates
- *     them on open from the injected values. No styles, colors or static text
- *     are modified.
+ *     template's FORMULA columns — C, T, S, AJ, AN, AO, AP — are never
+ *     touched, so Excel recalculates them on open from the injected values.
  */
 export class ExceljsInjector implements ExcelGenerator {
-  async generateAll(profiles: MemberProfile[]): Promise<Uint8Array> {
+  async generateAll(input: {
+    profiles: MemberProfile[];
+    globalFieldVisits: GlobalFieldVisit[];
+    globalMeetings: GlobalMeeting[];
+  }): Promise<Uint8Array> {
+    const { profiles, globalFieldVisits, globalMeetings } = input;
+
     const templateUrl = new URL(SMMEMBER_TEMPLATE.filePath, window.location.origin).href;
     let templateBytes: ArrayBuffer;
     try {
@@ -51,7 +53,7 @@ export class ExceljsInjector implements ExcelGenerator {
       templateBytes = await res.arrayBuffer();
     } catch (cause) {
       throw new Error(
-        `SMMEMBER template is not bundled. Copy "${SMMEMBER_TEMPLATE.filePath}" into public/templates/ and rebuild.`,
+        `SMMEMBER template not bundled. Copy "SMMEMBER .xlsx" from the "exel need" folder into public/templates/ and rebuild.`,
         { cause },
       );
     }
@@ -61,12 +63,19 @@ export class ExceljsInjector implements ExcelGenerator {
     const sheet = workbook.getWorksheet(SMMEMBER_TEMPLATE.sheetName);
     if (!sheet) throw new Error(`Sheet "${SMMEMBER_TEMPLATE.sheetName}" not found in template`);
 
+    // exceljs 4.x loads formula cells with cached `result` values from the
+    // template (e.g. { formula: '=IF(...)', result: 15 }). If we leave those
+    // intact, the stale cached numbers survive into the output and Excel
+    // displays them instead of recalculating.  Stripping `result` from every
+    // formula cell forces Excel to evaluate natively on open.
+    this.clearCachedFormulaResults(sheet);
+
     this.resetRegistry(sheet);
 
     // Header labels are global (one event column shared by all members), so
-    // derive the slot -> label map from every member's entries.
-    const visitHeaders = this.buildSlotLabels(profiles, 'fieldVisits');
-    const meetingHeaders = this.buildSlotLabels(profiles, 'meetings');
+    // derive the slot -> label map by joining member entries with global events.
+    const visitHeaders = this.buildSlotLabels(profiles, 'fieldVisits', globalFieldVisits);
+    const meetingHeaders = this.buildSlotLabels(profiles, 'meetings', globalMeetings);
     this.writeHeaders(sheet, visitHeaders, visitsStartCol, MAX_FIELD_VISITS);
     this.writeHeaders(sheet, meetingHeaders, meetingsStartCol, MAX_MEETINGS);
 
@@ -83,38 +92,68 @@ export class ExceljsInjector implements ExcelGenerator {
     return new Uint8Array(buffer as ArrayBuffer);
   }
 
+  /**
+   * Exceljs loads formula cells as `{ formula: '...', result: <cached> }`.
+   * The cached result is from the TEMPLATE's last save and is wrong for the
+   * new data we are about to inject.  By deleting `result` from every cell
+   * that has a `formula` property, we force Excel to re-evaluate all formulas
+   * natively when the user opens the downloaded file.
+   *
+   * We scan the ENTIRE sheet (not just the data rows) because formula cells
+   * can appear anywhere — including rows/columns we do not touch.
+   */
+  private clearCachedFormulaResults(sheet: ExcelJS.Worksheet): void {
+    sheet.eachRow((row) => {
+      row.eachCell({ includeEmpty: false }, (cell) => {
+        if (cell && typeof cell.value === 'object' && cell.value !== null && 'formula' in cell.value) {
+          delete (cell.value as unknown as Record<string, unknown>).result;
+        }
+      });
+    });
+  }
+
   private resetRegistry(sheet: ExcelJS.Worksheet): void {
     const { firstDataRow, lastDataRow } = SMMEMBER_TEMPLATE;
-    // Clear header cells (row 3) for visit and meeting labels.
-    for (let i = 0; i < MAX_FIELD_VISITS; i++) sheet.getRow(headerRow).getCell(visitsStartCol + i).value = '';
-    for (let i = 0; i < MAX_MEETINGS; i++) sheet.getRow(headerRow).getCell(meetingsStartCol + i).value = '';
 
-    // Clear only the DATA-ENTRY cells. The template's formula columns (C = Field
-    // Visits Entered, T = Meetings Entered, S/AJ/AN/AO/AP) are deliberately NOT
-    // touched, so their formulas survive and Excel recalculates them on open.
+    // CRITICAL: Use `null` — NOT empty strings (`''`). Excel's COUNTA treats
+    // "" as non-empty, which would make COUNTA($D$3:$R$3) always return 15
+    // regardless of how many headers were actually written. Setting cells to
+    // null makes them truly empty so COUNTA ignores them.
+
+    // Clear header cells (row 3) for visit and meeting labels.
+    for (let i = 0; i < MAX_FIELD_VISITS; i++) sheet.getRow(headerRow).getCell(visitsStartCol + i).value = null;
+    for (let i = 0; i < MAX_MEETINGS; i++) sheet.getRow(headerRow).getCell(meetingsStartCol + i).value = null;
+
+    // Clear only the DATA-ENTRY cells. The template's formula columns (C, T,
+    // S/AJ/AN/AO/AP) are deliberately NOT touched.
     for (let rowNumber = firstDataRow; rowNumber <= lastDataRow; rowNumber++) {
       const row = sheet.getRow(rowNumber);
-      row.getCell(nameCol).value = '';
+      row.getCell(nameCol).value = null;
       row.getCell(technicalCol).value = 0;
       row.getCell(interactionCol).value = 0;
       row.getCell(respectHierarchyCol).value = 0;
       row.getCell(bonusCol).value = 0;
-      for (let i = 0; i < MAX_FIELD_VISITS; i++) row.getCell(visitsStartCol + i).value = '';
-      for (let i = 0; i < MAX_MEETINGS; i++) row.getCell(meetingsStartCol + i).value = '';
+      for (let i = 0; i < MAX_FIELD_VISITS; i++) row.getCell(visitsStartCol + i).value = null;
+      for (let i = 0; i < MAX_MEETINGS; i++) row.getCell(meetingsStartCol + i).value = null;
     }
   }
 
   private buildSlotLabels(
     profiles: MemberProfile[],
     kind: 'fieldVisits' | 'meetings',
+    globalEvents: GlobalFieldVisit[] | GlobalMeeting[],
   ): Map<number, string> {
     const bySlot = new Map<number, string>();
+    const globalMap = new Map(globalEvents.map((e) => [e.id, e]));
+
     for (const profile of profiles) {
       for (const entry of profile[kind]) {
+        const globalEvent = globalMap.get(entry.globalEventId);
+        if (!globalEvent) continue;
         const label =
           kind === 'fieldVisits'
-            ? fieldVisitHeaderLabel(entry as FieldVisit)
-            : meetingHeaderLabel(entry as Meeting);
+            ? fieldVisitHeaderLabel(globalEvent as GlobalFieldVisit)
+            : meetingHeaderLabel(globalEvent as GlobalMeeting);
         bySlot.set(entry.slot, label);
       }
     }
@@ -130,7 +169,7 @@ export class ExceljsInjector implements ExcelGenerator {
     const headerRowCells = sheet.getRow(headerRow);
     for (let slot = 0; slot < maxSlots; slot++) {
       const label = labelsBySlot.get(slot);
-      headerRowCells.getCell(startCol + slot).value = label ?? '';
+      headerRowCells.getCell(startCol + slot).value = label ?? null;
     }
   }
 
@@ -138,10 +177,6 @@ export class ExceljsInjector implements ExcelGenerator {
     const row = sheet.getRow(rowNumber);
     const technical = profile.technical?.score ?? 0;
 
-    // Strictly cell-level writes to DATA-ENTRY columns only:
-    //   A = name, B = technical, D..R = visit scores, U..AI = meeting scores,
-    //   AK/AL/AM = Interaction / Respect Hierarchy / Bonus.
-    // The formula columns (C, T, S, AJ, AN, AO, AP) are never written to.
     row.getCell(nameCol).value = profile.member.name;
     row.getCell(technicalCol).value = technical;
 

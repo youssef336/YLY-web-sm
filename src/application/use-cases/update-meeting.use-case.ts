@@ -11,6 +11,6 @@ export class UpdateMeetingUseCase {
     const data = parseOrThrow(MeetingInputSchema, input);
     const member = await this.repository.findById(memberId);
     if (!member) throw new MemberNotFoundError(memberId);
-    await this.repository.updateMeeting(entryId, { date: data.date, score: data.score });
+    await this.repository.updateMeeting(entryId, { score: data.score });
   }
 }

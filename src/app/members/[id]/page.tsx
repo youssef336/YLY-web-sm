@@ -6,10 +6,12 @@ import { useParams, useRouter } from 'next/navigation';
 import { getContainer } from '@/infrastructure/container';
 import { downloadWorkbook } from '@/infrastructure/download';
 import { profileToView, type ProfileView } from '@/interface-adapters/presenters/profile.presenter';
+import type { GlobalFieldVisit } from '@/domain/entities/global-field-visit';
+import type { GlobalMeeting } from '@/domain/entities/global-meeting';
 import { BelloLogo } from '@/components/bello-logo';
 import { SummaryStrip } from '@/components/summary-strip';
 import { CategoryScoreField } from '@/components/category-score-field';
-import { EntrySection, type EntryFormInput } from '@/components/entry-section';
+import { EntrySection, type GlobalEventOption } from '@/components/entry-section';
 
 const inputBase =
   'rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-violet-400/60 disabled:cursor-not-allowed disabled:opacity-50';
@@ -20,6 +22,8 @@ export default function MemberProfilePage() {
   const memberId = params.id;
 
   const [profile, setProfile] = useState<ProfileView | null>(null);
+  const [globalVisits, setGlobalVisits] = useState<GlobalFieldVisit[]>([]);
+  const [globalMeetings, setGlobalMeetings] = useState<GlobalMeeting[]>([]);
   const [renameDraft, setRenameDraft] = useState('');
   const [technicalDraft, setTechnicalDraft] = useState('0');
   const [technicalSaved, setTechnicalSaved] = useState(false);
@@ -30,9 +34,16 @@ export default function MemberProfilePage() {
 
   const load = useCallback(async () => {
     try {
-      const p = await getContainer().getMemberProfile.execute(memberId);
-      const view = profileToView(p);
+      const c = getContainer();
+      const [p, gv, gm] = await Promise.all([
+        c.getMemberProfile.execute(memberId),
+        c.listGlobalFieldVisits.execute(),
+        c.listGlobalMeetings.execute(),
+      ]);
+      const view = profileToView(p, gv, gm);
       setProfile(view);
+      setGlobalVisits(gv);
+      setGlobalMeetings(gm);
       setTechnicalDraft(String(view.technical));
       setTechnicalSaved(true);
       setRenameDraft(view.member.name);
@@ -44,12 +55,18 @@ export default function MemberProfilePage() {
 
   useEffect(() => {
     let active = true;
-    getContainer()
-      .getMemberProfile.execute(memberId)
-      .then((p) => {
+    const c = getContainer();
+    Promise.all([
+      c.getMemberProfile.execute(memberId),
+      c.listGlobalFieldVisits.execute(),
+      c.listGlobalMeetings.execute(),
+    ])
+      .then(([p, gv, gm]) => {
         if (!active) return;
-        const view = profileToView(p);
+        const view = profileToView(p, gv, gm);
         setProfile(view);
+        setGlobalVisits(gv);
+        setGlobalMeetings(gm);
         setTechnicalDraft(String(view.technical));
         setTechnicalSaved(true);
         setRenameDraft(view.member.name);
@@ -76,13 +93,6 @@ export default function MemberProfilePage() {
     }
   }
 
-  async function saveTechnical(): Promise<void> {
-    const score = Number(technicalDraft) || 0;
-    if (score < 0 || score > 50) return;
-    await mutate(() => getContainer().updateTechnicalScore.execute(memberId, { score }));
-    setTechnicalSaved(true);
-  }
-
   function saveCategory(key: 'interaction' | 'respectHierarchy' | 'bonus', score: number) {
     const current = profile?.scores ?? { interaction: 0, respectHierarchy: 0, bonus: 0 };
     return mutate(() =>
@@ -92,6 +102,13 @@ export default function MemberProfilePage() {
         bonus: key === 'bonus' ? score : current.bonus,
       }),
     );
+  }
+
+  async function saveTechnical(): Promise<void> {
+    const score = Number(technicalDraft) || 0;
+    if (score < 0 || score > 50) return;
+    await mutate(() => getContainer().updateTechnicalScore.execute(memberId, { score }));
+    setTechnicalSaved(true);
   }
 
   async function saveRename(): Promise<void> {
@@ -114,7 +131,9 @@ export default function MemberProfilePage() {
       const bytes = await getContainer().exportEvaluationToExcel.execute();
       downloadWorkbook(bytes);
     } catch (err) {
-      setMessage(err instanceof Error ? err.message : 'Export failed. Check that the template is bundled.');
+      setMessage(
+        err instanceof Error ? err.message : 'Export failed. Check that the template is bundled.',
+      );
     } finally {
       setExporting(false);
     }
@@ -138,20 +157,28 @@ export default function MemberProfilePage() {
     );
   }
 
+  const visitGlobalOptions: GlobalEventOption[] = globalVisits.map((gv) => ({
+    id: gv.id,
+    label: `${gv.name} - ${gv.date}`,
+  }));
+
+  const meetingGlobalOptions: GlobalEventOption[] = globalMeetings.map((gm) => ({
+    id: gm.id,
+    label: gm.date,
+  }));
+
   const fieldVisitCallbacks = {
-    onAdd: (input: EntryFormInput) =>
+    onAdd: (input: { globalEventId: string; score: number }) =>
       mutate(() =>
         getContainer().addFieldVisit.execute(memberId, {
-          name: input.name ?? '',
-          date: input.date,
+          globalEventId: input.globalEventId,
           score: input.score as 0 | 1,
         }),
       ),
-    onUpdate: (id: string, input: EntryFormInput) =>
+    onUpdate: (id: string, input: { score: number }) =>
       mutate(() =>
         getContainer().updateFieldVisit.execute(memberId, id, {
-          name: input.name ?? '',
-          date: input.date,
+          globalEventId: '',
           score: input.score as 0 | 1,
         }),
       ),
@@ -159,17 +186,17 @@ export default function MemberProfilePage() {
   };
 
   const meetingCallbacks = {
-    onAdd: (input: EntryFormInput) =>
+    onAdd: (input: { globalEventId: string; score: number }) =>
       mutate(() =>
         getContainer().addMeeting.execute(memberId, {
-          date: input.date,
+          globalEventId: input.globalEventId,
           score: input.score as 0 | 1,
         }),
       ),
-    onUpdate: (id: string, input: EntryFormInput) =>
+    onUpdate: (id: string, input: { score: number }) =>
       mutate(() =>
         getContainer().updateMeeting.execute(memberId, id, {
-          date: input.date,
+          globalEventId: '',
           score: input.score as 0 | 1,
         }),
       ),
@@ -319,6 +346,7 @@ export default function MemberProfilePage() {
           }
           kind="visit"
           entries={profile.fieldVisits}
+          globalEvents={visitGlobalOptions}
           max={15}
           disabled={busy}
           onAdd={fieldVisitCallbacks.onAdd}
@@ -337,6 +365,7 @@ export default function MemberProfilePage() {
           }
           kind="meeting"
           entries={profile.meetings}
+          globalEvents={meetingGlobalOptions}
           max={15}
           disabled={busy}
           onAdd={meetingCallbacks.onAdd}

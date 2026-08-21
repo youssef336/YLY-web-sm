@@ -1,9 +1,9 @@
 /* Offline-first service worker: cache app shell + bundled template, serve
    from cache when the network is unavailable. */
-const CACHE_NAME = 'member-eval-v2';
+const CACHE_NAME = 'member-eval-v3';
 const PRECACHE = [
   '/',
-  '/templates/SMMEMBER (1) (1) (3).xlsx',
+  '/templates/SMMEMBER .xlsx',
   '/icon.svg',
   '/manifest.webmanifest',
 ];

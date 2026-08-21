@@ -4,6 +4,8 @@ import type { TechnicalEvaluation } from '@/domain/entities/technical-evaluation
 import type { FieldVisit } from '@/domain/entities/field-visit';
 import type { Meeting } from '@/domain/entities/meeting';
 import type { CategoryScores } from '@/domain/entities/category-scores';
+import type { GlobalFieldVisit } from '@/domain/entities/global-field-visit';
+import type { GlobalMeeting } from '@/domain/entities/global-meeting';
 
 /**
  * IndexedDB schema. Every evaluator's device keeps its own private copy of
@@ -22,6 +24,14 @@ export interface MemberEvalDb extends DBSchema {
     key: string; // memberId (one row per member)
     value: CategoryScores;
   };
+  globalFieldVisits: {
+    key: string;
+    value: GlobalFieldVisit;
+  };
+  globalMeetings: {
+    key: string;
+    value: GlobalMeeting;
+  };
   fieldVisits: {
     key: string;
     value: FieldVisit;
@@ -35,7 +45,7 @@ export interface MemberEvalDb extends DBSchema {
 }
 
 const DB_NAME = 'member-eval-db';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<MemberEvalDb>> | null = null;
 
@@ -52,6 +62,12 @@ export function getDb(): Promise<IDBPDatabase<MemberEvalDb>> {
         }
         if (!db.objectStoreNames.contains('categoryScores')) {
           db.createObjectStore('categoryScores', { keyPath: 'memberId' });
+        }
+        if (!db.objectStoreNames.contains('globalFieldVisits')) {
+          db.createObjectStore('globalFieldVisits', { keyPath: 'id' });
+        }
+        if (!db.objectStoreNames.contains('globalMeetings')) {
+          db.createObjectStore('globalMeetings', { keyPath: 'id' });
         }
         if (!db.objectStoreNames.contains('fieldVisits')) {
           const store = db.createObjectStore('fieldVisits', { keyPath: 'id' });

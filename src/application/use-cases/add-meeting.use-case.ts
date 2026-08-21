@@ -11,6 +11,6 @@ export class AddMeetingUseCase {
     const data = parseOrThrow(MeetingInputSchema, input);
     const member = await this.repository.findById(memberId);
     if (!member) throw new MemberNotFoundError(memberId);
-    await this.repository.addMeeting({ memberId, id: newId(), date: data.date, score: data.score });
+    await this.repository.addMeeting({ memberId, id: newId(), globalEventId: data.globalEventId, score: data.score });
   }
 }

@@ -3,11 +3,11 @@ import { calculateScoreSummary } from '@/domain/score/scoring';
 import type { Member } from '@/domain/entities/member';
 import type { TechnicalEvaluation } from '@/domain/entities/technical-evaluation';
 import type { FieldVisit, FieldVisitScore } from '@/domain/entities/field-visit';
-import { fieldVisitHeaderLabel } from '@/domain/entities/field-visit';
 import type { Meeting, MeetingScore } from '@/domain/entities/meeting';
-import { meetingHeaderLabel } from '@/domain/entities/meeting';
 import type { CategoryScores } from '@/domain/entities/category-scores';
 import type { MemberProfile } from '@/domain/entities/member-profile';
+import type { GlobalFieldVisit } from '@/domain/entities/global-field-visit';
+import type { GlobalMeeting } from '@/domain/entities/global-meeting';
 import { getDb } from './idb-database';
 
 const MAX_FIELD_VISITS = 15;
@@ -17,10 +17,9 @@ const MAX_MEETINGS = 15;
  * IndexedDB adapter for the LocalMemberRepository port (browser / PWA).
  * All operations are async and persist to the device's private database.
  *
- * Field Visits and Meetings occupy shared template columns (slots 0-14).
- * This adapter owns slot assignment: an entry reuses the slot of another
- * entry with the same label; otherwise it takes the next free slot. The rest
- * of the app never thinks about columns.
+ * Field Visits and Meetings reference global events by ID. The repository owns
+ * slot assignment: an entry reuses the slot of another entry with the same
+ * globalEventId; otherwise it allocates the lowest free slot.
  */
 export class IdbLocalRepository implements LocalMemberRepository {
   async createMember(member: Member): Promise<Member> {
@@ -92,26 +91,73 @@ export class IdbLocalRepository implements LocalMemberRepository {
     return scores;
   }
 
+  // ── Global events ──────────────────────────────────────────────────
+
+  async listGlobalFieldVisits(): Promise<GlobalFieldVisit[]> {
+    const db = await getDb();
+    return db.getAll('globalFieldVisits');
+  }
+
+  async createGlobalFieldVisit(input: GlobalFieldVisit): Promise<GlobalFieldVisit> {
+    const db = await getDb();
+    await db.put('globalFieldVisits', input);
+    return input;
+  }
+
+  async deleteGlobalFieldVisit(id: string): Promise<void> {
+    const db = await getDb();
+    // Cascade: delete all member entries referencing this global event.
+    const tx = db.transaction(['globalFieldVisits', 'fieldVisits'], 'readwrite');
+    tx.objectStore('globalFieldVisits').delete(id);
+    const allVisits = await tx.objectStore('fieldVisits').getAll();
+    for (const v of allVisits) {
+      if (v.globalEventId === id) await tx.objectStore('fieldVisits').delete(v.id);
+    }
+    await tx.done;
+  }
+
+  async listGlobalMeetings(): Promise<GlobalMeeting[]> {
+    const db = await getDb();
+    return db.getAll('globalMeetings');
+  }
+
+  async createGlobalMeeting(input: GlobalMeeting): Promise<GlobalMeeting> {
+    const db = await getDb();
+    await db.put('globalMeetings', input);
+    return input;
+  }
+
+  async deleteGlobalMeeting(id: string): Promise<void> {
+    const db = await getDb();
+    const tx = db.transaction(['globalMeetings', 'meetings'], 'readwrite');
+    tx.objectStore('globalMeetings').delete(id);
+    const allMeetings = await tx.objectStore('meetings').getAll();
+    for (const m of allMeetings) {
+      if (m.globalEventId === id) await tx.objectStore('meetings').delete(m.id);
+    }
+    await tx.done;
+  }
+
+  // ── Member entries (reference global events) ────────────────────────
+
   async addFieldVisit(input: {
     memberId: string;
     id: string;
-    name: string;
-    date: string;
+    globalEventId: string;
     score: FieldVisitScore;
   }): Promise<FieldVisit> {
     const db = await getDb();
-    const slot = await this.resolveSlot('fieldVisits', null, input, MAX_FIELD_VISITS);
+    const slot = await this.resolveSlot('fieldVisits', null, input.globalEventId, MAX_FIELD_VISITS);
     const visit: FieldVisit = { ...input, slot, createdAt: new Date() };
     await db.put('fieldVisits', visit);
     return visit;
   }
 
-  async updateFieldVisit(id: string, input: { name: string; date: string; score: FieldVisitScore }): Promise<FieldVisit> {
+  async updateFieldVisit(id: string, input: { score: FieldVisitScore }): Promise<FieldVisit> {
     const db = await getDb();
     const existing = await db.get('fieldVisits', id);
     if (!existing) throw new Error('Field visit not found');
-    const slot = await this.resolveSlot('fieldVisits', id, input, MAX_FIELD_VISITS);
-    const updated: FieldVisit = { ...existing, ...input, slot };
+    const updated: FieldVisit = { ...existing, ...input };
     await db.put('fieldVisits', updated);
     return updated;
   }
@@ -121,20 +167,19 @@ export class IdbLocalRepository implements LocalMemberRepository {
     await db.delete('fieldVisits', id);
   }
 
-  async addMeeting(input: { memberId: string; id: string; date: string; score: MeetingScore }): Promise<Meeting> {
+  async addMeeting(input: { memberId: string; id: string; globalEventId: string; score: MeetingScore }): Promise<Meeting> {
     const db = await getDb();
-    const slot = await this.resolveSlot('meetings', null, input, MAX_MEETINGS);
+    const slot = await this.resolveSlot('meetings', null, input.globalEventId, MAX_MEETINGS);
     const meeting: Meeting = { ...input, slot, createdAt: new Date() };
     await db.put('meetings', meeting);
     return meeting;
   }
 
-  async updateMeeting(id: string, input: { date: string; score: MeetingScore }): Promise<Meeting> {
+  async updateMeeting(id: string, input: { score: MeetingScore }): Promise<Meeting> {
     const db = await getDb();
     const existing = await db.get('meetings', id);
     if (!existing) throw new Error('Meeting not found');
-    const slot = await this.resolveSlot('meetings', id, input, MAX_MEETINGS);
-    const updated: Meeting = { ...existing, ...input, slot };
+    const updated: Meeting = { ...existing, ...input };
     await db.put('meetings', updated);
     return updated;
   }
@@ -170,23 +215,22 @@ export class IdbLocalRepository implements LocalMemberRepository {
 
   /**
    * Assigns a template column (slot 0-14) for a field visit / meeting entry.
-   * Reuses the slot of an existing entry with the same header label (so one
-   * event = one column shared by every member), otherwise allocates the lowest
-   * free slot. Throws once all slots are taken.
+   * Reuses the slot of an existing entry with the same globalEventId (so one
+   * global event = one column shared by every member), otherwise allocates the
+   * lowest free slot. Throws once all slots are taken.
    */
   private async resolveSlot(
     store: 'fieldVisits' | 'meetings',
     excludeId: string | null,
-    input: { name?: string; date: string },
+    globalEventId: string,
     maxSlots: number,
   ): Promise<number> {
     const db = await getDb();
     const all = await db.getAll(store);
     const others = excludeId ? all.filter((e) => e.id !== excludeId) : all;
 
-    const target = this.headerLabel(store, input).trim().toLowerCase();
-    const same = others.find((e) => this.headerLabel(store, e).trim().toLowerCase() === target);
-    if (same) return same.slot;
+    const sameEvent = others.find((e) => e.globalEventId === globalEventId);
+    if (sameEvent) return sameEvent.slot;
 
     const used = new Set(others.map((e) => e.slot));
     for (let slot = 0; slot < maxSlots; slot++) {
@@ -194,14 +238,5 @@ export class IdbLocalRepository implements LocalMemberRepository {
     }
     const noun = store === 'fieldVisits' ? 'field visits' : 'meetings';
     throw new Error(`Maximum ${maxSlots} ${noun} reached`);
-  }
-
-  private headerLabel(
-    store: 'fieldVisits' | 'meetings',
-    entry: { name?: string; date: string },
-  ): string {
-    return store === 'fieldVisits'
-      ? fieldVisitHeaderLabel({ name: entry.name ?? '', date: entry.date })
-      : meetingHeaderLabel({ date: entry.date });
   }
 }

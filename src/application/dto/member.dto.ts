@@ -30,17 +30,29 @@ export type CategoryScoresInput = z.infer<typeof CategoryScoresInputSchema>;
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Field Visit: location/event name + date (picked) + attendance score. */
-export const FieldVisitInputSchema = z.object({
+/** Global Field Visit: location/event name + date (independent of members). */
+export const GlobalFieldVisitInputSchema = z.object({
   name: z.string().trim().min(1, 'Location / event name is required').max(200),
   date: z.string().regex(isoDate, 'A valid date is required'),
+});
+export type GlobalFieldVisitInput = z.infer<typeof GlobalFieldVisitInputSchema>;
+
+/** Global Meeting: date only (independent of members). */
+export const GlobalMeetingInputSchema = z.object({
+  date: z.string().regex(isoDate, 'A valid date is required'),
+});
+export type GlobalMeetingInput = z.infer<typeof GlobalMeetingInputSchema>;
+
+/** Field Visit entry: references a global event + attendance score. */
+export const FieldVisitInputSchema = z.object({
+  globalEventId: z.string().min(1, 'Please select a field visit'),
   score: z.union([z.literal(0), z.literal(1)]),
 });
 export type FieldVisitInput = z.infer<typeof FieldVisitInputSchema>;
 
-/** Meeting: date (picked) + attendance score only. */
+/** Meeting entry: references a global event + attendance score. */
 export const MeetingInputSchema = z.object({
-  date: z.string().regex(isoDate, 'A valid date is required'),
+  globalEventId: z.string().min(1, 'Please select a meeting'),
   score: z.union([z.literal(0), z.literal(1)]),
 });
 export type MeetingInput = z.infer<typeof MeetingInputSchema>;
