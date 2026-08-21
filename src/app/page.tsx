@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { getContainer } from '@/infrastructure/container';
 import { downloadWorkbook } from '@/infrastructure/download';
 import {
@@ -174,14 +175,22 @@ export default function HomePage() {
             <p className="text-sm text-slate-400">Member Evaluation &amp; Tracking</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => void handleExport()}
-          disabled={exporting}
-          className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {exporting ? 'Exporting…' : 'Export Excel'}
-        </button>
+        <div className="flex items-center gap-2">
+          <Link
+            href="/leader"
+            className="rounded-xl border border-white/15 px-4 py-2 text-sm font-semibold text-slate-300 transition-colors hover:bg-white/5"
+          >
+            Leader Dashboard
+          </Link>
+          <button
+            type="button"
+            onClick={() => void handleExport()}
+            disabled={exporting}
+            className="rounded-xl bg-gradient-to-r from-indigo-500 to-violet-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-indigo-950/40 transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {exporting ? 'Exporting…' : 'Export Excel'}
+          </button>
+        </div>
       </header>
 
       {/* Add member */}
