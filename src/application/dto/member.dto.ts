@@ -38,8 +38,9 @@ export const GlobalFieldVisitInputSchema = z.object({
 });
 export type GlobalFieldVisitInput = z.infer<typeof GlobalFieldVisitInputSchema>;
 
-/** Global Meeting: date only (independent of members). */
+/** Global Meeting: name + date (independent of members). */
 export const GlobalMeetingInputSchema = z.object({
+  name: z.string().trim().min(1, 'Meeting name is required').max(200),
   date: z.string().regex(isoDate, 'A valid date is required'),
 });
 export type GlobalMeetingInput = z.infer<typeof GlobalMeetingInputSchema>;

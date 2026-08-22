@@ -45,7 +45,7 @@ export interface MemberEvalDb extends DBSchema {
 }
 
 const DB_NAME = 'member-eval-db';
-const DB_VERSION = 4;
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBPDatabase<MemberEvalDb>> | null = null;
 
@@ -53,7 +53,7 @@ let dbPromise: Promise<IDBPDatabase<MemberEvalDb>> | null = null;
 export function getDb(): Promise<IDBPDatabase<MemberEvalDb>> {
   if (!dbPromise) {
     dbPromise = openDB<MemberEvalDb>(DB_NAME, DB_VERSION, {
-      upgrade(db, oldVersion) {
+      upgrade(db, oldVersion, _newVersion, tx) {
         if (!db.objectStoreNames.contains('members')) {
           db.createObjectStore('members', { keyPath: 'id' });
         }
@@ -82,14 +82,29 @@ export function getDb(): Promise<IDBPDatabase<MemberEvalDb>> {
           db.deleteObjectStore('tasks' as 'fieldVisits');
         }
         // v4: add `shift` field to existing globalFieldVisits records.
+        // CRITICAL: Use the upgrade transaction (`tx`) — never call db.transaction()
+        // during upgrade, as a version change transaction is already running.
         if (oldVersion < 4 && db.objectStoreNames.contains('globalFieldVisits')) {
-          const tx = db.transaction('globalFieldVisits', 'readwrite');
-          tx.store.openCursor().then(function processCursor(cursor) {
+          const store = tx.objectStore('globalFieldVisits');
+          store.openCursor().then(function processCursor(cursor) {
             if (!cursor) return;
             const val = { ...cursor.value } as Record<string, unknown>;
             if (!val.shift) {
               val.shift = 'Day';
               cursor.update(val as unknown as GlobalFieldVisit);
+            }
+            cursor.continue().then(processCursor);
+          });
+        }
+        // v5: add `name` field to existing globalMeetings records.
+        if (oldVersion < 5 && db.objectStoreNames.contains('globalMeetings')) {
+          const store = tx.objectStore('globalMeetings');
+          store.openCursor().then(function processCursor(cursor) {
+            if (!cursor) return;
+            const val = { ...cursor.value } as Record<string, unknown>;
+            if (!val.name) {
+              val.name = val.date ?? 'Meeting';
+              cursor.update(val as unknown as GlobalMeeting);
             }
             cursor.continue().then(processCursor);
           });

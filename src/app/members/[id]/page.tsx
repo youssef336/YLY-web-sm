@@ -169,7 +169,7 @@ export default function MemberProfilePage() {
   const meetingGlobalOptions: GlobalEventOption[] = [...globalMeetings]
     .filter((gm) => !usedMeetingIds.has(gm.id))
     .sort((a, b) => b.date.localeCompare(a.date))
-    .map((gm) => ({ id: gm.id, label: gm.date }));
+    .map((gm) => ({ id: gm.id, label: `${gm.name} - ${gm.date}` }));
 
   const fieldVisitCallbacks = {
     onAdd: (input: { globalEventId: string; score: number }) => {
@@ -372,9 +372,10 @@ export default function MemberProfilePage() {
           title="Meetings"
           description={
             <>
-              Pick a meeting date only. The date becomes the column header in the Excel template
-              (row 4); the score (1 attended / 0 absent) is placed in this member&apos;s row under
-              that column.
+              Pick a meeting name and date. The label{' '}
+              <span className="font-medium text-slate-200">&ldquo;Name - Date&rdquo;</span> becomes
+              the column header in the Excel template (row 4); the score (1 attended / 0 absent) is
+              placed in this member&apos;s row under that column.
             </>
           }
           kind="meeting"

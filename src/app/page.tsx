@@ -41,6 +41,7 @@ export default function HomePage() {
   const [visitName, setVisitName] = useState('');
   const [visitDate, setVisitDate] = useState('');
   const [visitShift, setVisitShift] = useState<'Day' | 'Night'>('Day');
+  const [meetingName, setMeetingName] = useState('');
   const [meetingDate, setMeetingDate] = useState('');
   const [addingVisit, setAddingVisit] = useState(false);
   const [addingMeeting, setAddingMeeting] = useState(false);
@@ -119,11 +120,12 @@ export default function HomePage() {
 
   async function addGlobalMeeting(e: FormEvent): Promise<void> {
     e.preventDefault();
-    if (!meetingDate) return;
+    if (!meetingName.trim() || !meetingDate) return;
     setAddingMeeting(true);
     setError(null);
     try {
-      await getContainer().createGlobalMeeting.execute({ date: meetingDate });
+      await getContainer().createGlobalMeeting.execute({ name: meetingName.trim(), date: meetingDate });
+      setMeetingName('');
       setMeetingDate('');
       const gm = await getContainer().listGlobalMeetings.execute();
       setGlobalMeetings(gm);
@@ -276,6 +278,15 @@ export default function HomePage() {
             {/* Add meeting */}
             <form className="flex flex-wrap items-center gap-2" onSubmit={addGlobalMeeting}>
               <input
+                className={`${inputBase} min-w-36 flex-1`}
+                placeholder="Meeting name"
+                value={meetingName}
+                maxLength={100}
+                required
+                disabled={addingMeeting}
+                onChange={(e) => setMeetingName(e.target.value)}
+              />
+              <input
                 className={inputBase}
                 type="date"
                 value={meetingDate}
@@ -285,7 +296,7 @@ export default function HomePage() {
               />
               <button
                 type="submit"
-                disabled={addingMeeting || !meetingDate}
+                disabled={addingMeeting || !meetingName.trim() || !meetingDate}
                 className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-950/40 transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 {addingMeeting ? 'Adding…' : 'Add meeting'}
@@ -323,7 +334,10 @@ export default function HomePage() {
                 <ul className="space-y-1">
                   {globalMeetings.map((g) => (
                     <li key={g.id} className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
-                      <span className="text-slate-100">{g.date}</span>
+                      <span>
+                        <span className="font-medium text-slate-100">{g.name}</span>
+                        <span className="ml-2 text-slate-400">{g.date}</span>
+                      </span>
                       <button
                         type="button"
                         onClick={() => void deleteGlobalMeeting(g.id)}

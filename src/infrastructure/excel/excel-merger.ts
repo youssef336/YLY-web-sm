@@ -190,7 +190,9 @@ export async function mergeExcelFiles(
 
   for (let i = 0; i < officialMeetings.length && i < MAX_MEETINGS; i++) {
     const ev = officialMeetings[i];
-    masterHeaderRow.getCell(meetingsStartCol + i).value = ev.date;
+    const name = ev.name ?? 'Meeting';
+    const label = `${name} - ${ev.date}`;
+    masterHeaderRow.getCell(meetingsStartCol + i).value = label;
     masterMeetingKeyToSlot.set(ev.date, i);
   }
 

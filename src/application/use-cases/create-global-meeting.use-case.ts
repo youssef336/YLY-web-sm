@@ -10,6 +10,7 @@ export class CreateGlobalMeetingUseCase {
     const data = parseOrThrow(GlobalMeetingInputSchema, input);
     await this.repository.createGlobalMeeting({
       id: newId(),
+      name: data.name,
       date: data.date,
       createdAt: new Date(),
     });

@@ -43,6 +43,7 @@ export default function LeaderDashboardPage() {
   const [visitName, setVisitName] = useState('');
   const [visitDate, setVisitDate] = useState('');
   const [visitShift, setVisitShift] = useState<'Day' | 'Night'>('Day');
+  const [meetingName, setMeetingName] = useState('');
   const [meetingDate, setMeetingDate] = useState('');
   const [taskTarget, setTaskTarget] = useState(3);
 
@@ -130,12 +131,13 @@ export default function LeaderDashboardPage() {
 
   function addMeeting(e: FormEvent): void {
     e.preventDefault();
-    if (!meetingDate) return;
-    if (officialMeetings.some((m) => m.date === meetingDate)) {
-      setError('This meeting date already exists.');
+    if (!meetingName.trim() || !meetingDate) return;
+    if (officialMeetings.some((m) => m.date === meetingDate && m.name === meetingName.trim())) {
+      setError('This meeting name and date already exists.');
       return;
     }
-    setOfficialMeetings((prev) => [...prev, { date: meetingDate }]);
+    setOfficialMeetings((prev) => [...prev, { name: meetingName.trim(), date: meetingDate }]);
+    setMeetingName('');
     setMeetingDate('');
     setError(null);
   }
@@ -269,6 +271,14 @@ export default function LeaderDashboardPage() {
           <h3 className="mb-2 text-sm font-semibold text-slate-300">Meetings</h3>
           <form className="flex flex-wrap items-center gap-2" onSubmit={addMeeting}>
             <input
+              className={`${inputBase} min-w-36 flex-1`}
+              placeholder="Meeting name"
+              value={meetingName}
+              maxLength={100}
+              required
+              onChange={(e) => setMeetingName(e.target.value)}
+            />
+            <input
               className={inputBase}
               type="date"
               value={meetingDate}
@@ -277,7 +287,7 @@ export default function LeaderDashboardPage() {
             />
             <button
               type="submit"
-              disabled={!meetingDate}
+              disabled={!meetingName.trim() || !meetingDate}
               className="rounded-xl bg-gradient-to-r from-sky-500 to-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-sky-950/40 transition-all hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Add
@@ -287,7 +297,9 @@ export default function LeaderDashboardPage() {
             <ul className="mt-2 space-y-1">
               {officialMeetings.map((ev, i) => (
                 <li key={`${ev.date}-${i}`} className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
-                  <span className="text-slate-100">{ev.date}</span>
+                  <span>
+                    <span className="font-medium text-slate-100">{ev.name} - {ev.date}</span>
+                  </span>
                   <button
                     type="button"
                     onClick={() => removeMeeting(i)}
@@ -418,7 +430,7 @@ export default function LeaderDashboardPage() {
         <ol className="space-y-2 text-sm text-slate-400">
           <li className="flex gap-2">
             <span className="font-bold text-violet-400">1.</span>
-            You define the official field visits and meetings (name + date + shift). These become the master column headers.
+            You define the official field visits (name + date + shift) and meetings (name + date). These become the master column headers.
           </li>
           <li className="flex gap-2">
             <span className="font-bold text-violet-400">2.</span>
