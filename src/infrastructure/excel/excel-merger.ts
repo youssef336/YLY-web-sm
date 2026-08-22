@@ -265,6 +265,9 @@ export async function mergeExcelFiles(
 
     row.getCell(nameCol).value = data.name;
     row.getCell(technicalCol).value = data.technical;
+    if (taskTarget && taskTarget > 0) {
+      row.getCell(visitsCountCol).value = taskTarget;
+    }
 
     for (let s = 0; s < MAX_FIELD_VISITS; s++) {
       if (data.visits[s] != null) row.getCell(visitsStartCol + s).value = data.visits[s];
