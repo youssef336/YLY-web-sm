@@ -12,6 +12,7 @@ const nameCol = columnLetterToIndex(columns.name);
 const technicalCol = columnLetterToIndex(columns.technical);
 const visitsStartCol = columnLetterToIndex(columns.visitsStart);
 const visitsCountCol = columnLetterToIndex(columns.visitsCount);
+const visitsTotalCol = 19; // Column S — Field Visits Total /20
 const meetingsStartCol = columnLetterToIndex(columns.meetingsStart);
 const interactionCol = columnLetterToIndex(columns.interaction);
 const respectHierarchyCol = columnLetterToIndex(columns.respectHierarchy);
@@ -265,9 +266,6 @@ export async function mergeExcelFiles(
 
     row.getCell(nameCol).value = data.name;
     row.getCell(technicalCol).value = data.technical;
-    if (taskTarget && taskTarget > 0) {
-      row.getCell(visitsCountCol).value = taskTarget;
-    }
 
     for (let s = 0; s < MAX_FIELD_VISITS; s++) {
       if (data.visits[s] != null) row.getCell(visitsStartCol + s).value = data.visits[s];
@@ -282,18 +280,31 @@ export async function mergeExcelFiles(
     row.getCell(bonusCol).value = data.bonus;
   }
 
-  // 5. Inject dynamic "Task Target" formula into Column S (Field Visits Total /20)
-  //    Formula: =IFERROR(ROUND(MIN(SUM(D{row}:R{row})/[TARGET], 1)*20, 0), 0)
-  //    This divides the visit score sum by the target (not total columns) and caps at 20.
-  if (taskTarget && taskTarget > 0) {
-    const visitCols = `D${firstDataRow}:R`; // will append row number per row
-    for (let r = firstDataRow; r <= lastDataRow; r++) {
-      const formula = `IFERROR(ROUND(MIN(SUM(D${r}:R${r})/${taskTarget}, 1)*20, 0), 0)`;
-      masterSheet.getRow(r).getCell(visitsCountCol).value = { formula } as ExcelJS.CellFormulaValue;
+  // 5. Force-inject the monthly target into Column C ("Field Visits Entered") for
+  //    EVERY data row. This overwrites the template's =COUNTA(...) formula so it
+  //    shows the leader's target number, not a formula result.
+  const targetNumber = Number(taskTarget) || 3;
+  for (let r = firstDataRow; r <= lastDataRow; r++) {
+    const row = masterSheet.getRow(r);
+    const cell = row.getCell(visitsCountCol);
+    cell.value = targetNumber;
+    // Scrub any lingering formula / cached result so Excel shows the raw number
+    if (typeof cell.value === 'object' && cell.value !== null) {
+      delete (cell.value as Record<string, unknown>).formula;
+      delete (cell.value as Record<string, unknown>).result;
     }
   }
 
-  // 6. Strip cached formula results so Excel recalculates on open
+  // 6. Inject dynamic "Task Target" formula into Column S (Field Visits Total /20)
+  //    Formula: =IFERROR(ROUND(MIN(SUM(D{row}:R{row})/[TARGET], 1)*20, 0), 0)
+  if (taskTarget && taskTarget > 0) {
+    for (let r = firstDataRow; r <= lastDataRow; r++) {
+      const formula = `IFERROR(ROUND(MIN(SUM(D${r}:R${r})/${taskTarget}, 1)*20, 0), 0)`;
+      masterSheet.getRow(r).getCell(visitsTotalCol).value = { formula } as ExcelJS.CellFormulaValue;
+    }
+  }
+
+  // 7. Strip cached formula results so Excel recalculates on open
   masterSheet.eachRow((row) => {
     row.eachCell({ includeEmpty: false }, (cell) => {
       if (cell && typeof cell.value === 'object' && cell.value !== null && 'formula' in cell.value) {
