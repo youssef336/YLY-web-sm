@@ -40,6 +40,7 @@ export default function HomePage() {
   const [globalMeetings, setGlobalMeetings] = useState<GlobalMeeting[]>([]);
   const [visitName, setVisitName] = useState('');
   const [visitDate, setVisitDate] = useState('');
+  const [visitShift, setVisitShift] = useState<'Day' | 'Night'>('Day');
   const [meetingDate, setMeetingDate] = useState('');
   const [addingVisit, setAddingVisit] = useState(false);
   const [addingMeeting, setAddingMeeting] = useState(false);
@@ -103,9 +104,10 @@ export default function HomePage() {
     setAddingVisit(true);
     setError(null);
     try {
-      await getContainer().createGlobalFieldVisit.execute({ name: visitName.trim(), date: visitDate });
+      await getContainer().createGlobalFieldVisit.execute({ name: visitName.trim(), date: visitDate, shift: visitShift });
       setVisitName('');
       setVisitDate('');
+      setVisitShift('Day');
       const gv = await getContainer().listGlobalFieldVisits.execute();
       setGlobalVisits(gv);
     } catch (err) {
@@ -253,6 +255,15 @@ export default function HomePage() {
                 disabled={addingVisit}
                 onChange={(e) => setVisitDate(e.target.value)}
               />
+              <select
+                className={`${inputBase} cursor-pointer`}
+                value={visitShift}
+                disabled={addingVisit}
+                onChange={(e) => setVisitShift(e.target.value as 'Day' | 'Night')}
+              >
+                <option value="Day">Day</option>
+                <option value="Night">Night</option>
+              </select>
               <button
                 type="submit"
                 disabled={addingVisit || !visitName.trim() || !visitDate}
@@ -290,7 +301,7 @@ export default function HomePage() {
                     <li key={g.id} className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
                       <span>
                         <span className="font-medium text-slate-100">{g.name}</span>
-                        <span className="ml-2 text-slate-400">{g.date}</span>
+                        <span className="ml-2 text-slate-400">{g.date} ({g.shift})</span>
                       </span>
                       <button
                         type="button"

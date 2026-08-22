@@ -1,12 +1,34 @@
 'use client';
 
-import { useCallback, useRef, useState, type FormEvent, type DragEvent, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent, type DragEvent, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { BelloLogo } from '@/components/bello-logo';
 import { mergeExcelFiles, type OfficialEvent } from '@/infrastructure/excel/excel-merger';
 
 const inputBase =
   'rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-violet-400/60 disabled:cursor-not-allowed disabled:opacity-50';
+
+function loadOfficialEvents(key: string): OfficialEvent[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as OfficialEvent[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function loadTaskTarget(): number {
+  if (typeof window === 'undefined') return 3;
+  try {
+    const raw = localStorage.getItem('bello_task_target');
+    if (raw !== null) {
+      const n = Number(raw);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+  } catch { /* ignore */ }
+  return 3;
+}
 
 export default function LeaderDashboardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -16,12 +38,35 @@ export default function LeaderDashboardPage() {
   const [result, setResult] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Official events defined by the leader
   const [officialVisits, setOfficialVisits] = useState<OfficialEvent[]>([]);
   const [officialMeetings, setOfficialMeetings] = useState<OfficialEvent[]>([]);
   const [visitName, setVisitName] = useState('');
   const [visitDate, setVisitDate] = useState('');
+  const [visitShift, setVisitShift] = useState<'Day' | 'Night'>('Day');
   const [meetingDate, setMeetingDate] = useState('');
+  const [taskTarget, setTaskTarget] = useState(3);
+
+  // Hydrate from localStorage
+  useEffect(() => {
+    setOfficialVisits(loadOfficialEvents('bellο_official_visits'));
+    setOfficialMeetings(loadOfficialEvents('bello_official_meetings'));
+    setTaskTarget(loadTaskTarget());
+  }, []);
+
+  // Persist officialVisits
+  useEffect(() => {
+    localStorage.setItem('bellο_official_visits', JSON.stringify(officialVisits));
+  }, [officialVisits]);
+
+  // Persist officialMeetings
+  useEffect(() => {
+    localStorage.setItem('bello_official_meetings', JSON.stringify(officialMeetings));
+  }, [officialMeetings]);
+
+  // Persist taskTarget
+  useEffect(() => {
+    localStorage.setItem('bello_task_target', String(taskTarget));
+  }, [taskTarget]);
 
   const accept = '.xlsx,.xls';
 
@@ -68,13 +113,14 @@ export default function LeaderDashboardPage() {
   function addVisit(e: FormEvent): void {
     e.preventDefault();
     if (!visitName.trim() || !visitDate) return;
-    if (officialVisits.some((v) => v.date === visitDate && v.name === visitName.trim())) {
-      setError('This field visit already exists.');
+    if (officialVisits.some((v) => v.date === visitDate && v.shift === visitShift)) {
+      setError('A field visit for this date and shift already exists.');
       return;
     }
-    setOfficialVisits((prev) => [...prev, { name: visitName.trim(), date: visitDate }]);
+    setOfficialVisits((prev) => [...prev, { name: visitName.trim(), date: visitDate, shift: visitShift }]);
     setVisitName('');
     setVisitDate('');
+    setVisitShift('Day');
     setError(null);
   }
 
@@ -109,7 +155,7 @@ export default function LeaderDashboardPage() {
     setError(null);
     setResult(null);
     try {
-      const mergedBytes = await mergeExcelFiles(files, officialVisits, officialMeetings);
+      const mergedBytes = await mergeExcelFiles(files, officialVisits, officialMeetings, taskTarget);
 
       const blob = new Blob([new Uint8Array(mergedBytes)], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -129,7 +175,7 @@ export default function LeaderDashboardPage() {
     } finally {
       setProcessing(false);
     }
-  }, [files, officialVisits, officialMeetings]);
+  }, [files, officialVisits, officialMeetings, taskTarget]);
 
   return (
     <main className="animate-bello-in mx-auto w-full max-w-4xl px-4 pb-24 pt-8 sm:px-6">
@@ -180,6 +226,14 @@ export default function LeaderDashboardPage() {
               required
               onChange={(e) => setVisitDate(e.target.value)}
             />
+            <select
+              className={inputBase}
+              value={visitShift}
+              onChange={(e) => setVisitShift(e.target.value as 'Day' | 'Night')}
+            >
+              <option value="Day">Day</option>
+              <option value="Night">Night</option>
+            </select>
             <button
               type="submit"
               disabled={!visitName.trim() || !visitDate}
@@ -191,10 +245,11 @@ export default function LeaderDashboardPage() {
           {officialVisits.length > 0 && (
             <ul className="mt-2 space-y-1">
               {officialVisits.map((ev, i) => (
-                <li key={`${ev.date}-${i}`} className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
+                <li key={`${ev.date}-${ev.shift ?? ''}-${i}`} className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
                   <span>
-                    <span className="font-medium text-slate-100">{ev.name}</span>
-                    <span className="ml-2 text-slate-400">{ev.date}</span>
+                    <span className="font-medium text-slate-100">
+                      {ev.name} - {ev.date} ({ev.shift ?? 'Day'})
+                    </span>
                   </span>
                   <button
                     type="button"
@@ -210,7 +265,7 @@ export default function LeaderDashboardPage() {
         </div>
 
         {/* Official Meetings */}
-        <div>
+        <div className="mb-4">
           <h3 className="mb-2 text-sm font-semibold text-slate-300">Meetings</h3>
           <form className="flex flex-wrap items-center gap-2" onSubmit={addMeeting}>
             <input
@@ -244,6 +299,21 @@ export default function LeaderDashboardPage() {
               ))}
             </ul>
           )}
+        </div>
+
+        {/* Monthly Target */}
+        <div>
+          <h3 className="mb-2 text-sm font-semibold text-slate-300">Monthly Target Field Visits</h3>
+          <input
+            className={inputBase}
+            type="number"
+            min={1}
+            value={taskTarget}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              if (Number.isFinite(n) && n > 0) setTaskTarget(n);
+            }}
+          />
         </div>
       </section>
 
@@ -348,7 +418,7 @@ export default function LeaderDashboardPage() {
         <ol className="space-y-2 text-sm text-slate-400">
           <li className="flex gap-2">
             <span className="font-bold text-violet-400">1.</span>
-            You define the official field visits and meetings (name + date). These become the master column headers.
+            You define the official field visits and meetings (name + date + shift). These become the master column headers.
           </li>
           <li className="flex gap-2">
             <span className="font-bold text-violet-400">2.</span>

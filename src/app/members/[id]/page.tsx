@@ -164,7 +164,7 @@ export default function MemberProfilePage() {
   const visitGlobalOptions: GlobalEventOption[] = [...globalVisits]
     .filter((gv) => !usedVisitIds.has(gv.id))
     .sort((a, b) => b.date.localeCompare(a.date))
-    .map((gv) => ({ id: gv.id, label: `${gv.name} - ${gv.date}` }));
+    .map((gv) => ({ id: gv.id, label: `${gv.name} - ${gv.date} (${gv.shift})` }));
 
   const meetingGlobalOptions: GlobalEventOption[] = [...globalMeetings]
     .filter((gm) => !usedMeetingIds.has(gm.id))

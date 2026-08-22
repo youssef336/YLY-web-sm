@@ -12,6 +12,7 @@ export class CreateGlobalFieldVisitUseCase {
       id: newId(),
       name: data.name,
       date: data.date,
+      shift: data.shift,
       createdAt: new Date(),
     });
   }

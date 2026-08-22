@@ -45,7 +45,7 @@ export interface MemberEvalDb extends DBSchema {
 }
 
 const DB_NAME = 'member-eval-db';
-const DB_VERSION = 3;
+const DB_VERSION = 4;
 
 let dbPromise: Promise<IDBPDatabase<MemberEvalDb>> | null = null;
 
@@ -80,6 +80,19 @@ export function getDb(): Promise<IDBPDatabase<MemberEvalDb>> {
         // v1 shipped a `tasks` store that no longer exists; drop it on upgrade.
         if (oldVersion < 2 && (Array.from(db.objectStoreNames) as string[]).includes('tasks')) {
           db.deleteObjectStore('tasks' as 'fieldVisits');
+        }
+        // v4: add `shift` field to existing globalFieldVisits records.
+        if (oldVersion < 4 && db.objectStoreNames.contains('globalFieldVisits')) {
+          const tx = db.transaction('globalFieldVisits', 'readwrite');
+          tx.store.openCursor().then(function processCursor(cursor) {
+            if (!cursor) return;
+            const val = { ...cursor.value } as Record<string, unknown>;
+            if (!val.shift) {
+              val.shift = 'Day';
+              cursor.update(val as unknown as GlobalFieldVisit);
+            }
+            cursor.continue().then(processCursor);
+          });
         }
       },
     });

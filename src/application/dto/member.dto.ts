@@ -30,10 +30,11 @@ export type CategoryScoresInput = z.infer<typeof CategoryScoresInputSchema>;
 
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Global Field Visit: location/event name + date (independent of members). */
+/** Global Field Visit: location/event name + date + shift (independent of members). */
 export const GlobalFieldVisitInputSchema = z.object({
   name: z.string().trim().min(1, 'Location / event name is required').max(200),
   date: z.string().regex(isoDate, 'A valid date is required'),
+  shift: z.enum(['Day', 'Night'], { message: 'Shift is required' }),
 });
 export type GlobalFieldVisitInput = z.infer<typeof GlobalFieldVisitInputSchema>;
 

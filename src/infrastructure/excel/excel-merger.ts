@@ -11,6 +11,7 @@ const { columns, headerRow, firstDataRow, lastDataRow } = SMMEMBER_TEMPLATE;
 const nameCol = columnLetterToIndex(columns.name);
 const technicalCol = columnLetterToIndex(columns.technical);
 const visitsStartCol = columnLetterToIndex(columns.visitsStart);
+const visitsCountCol = columnLetterToIndex(columns.visitsCount);
 const meetingsStartCol = columnLetterToIndex(columns.meetingsStart);
 const interactionCol = columnLetterToIndex(columns.interaction);
 const respectHierarchyCol = columnLetterToIndex(columns.respectHierarchy);
@@ -19,6 +20,7 @@ const bonusCol = columnLetterToIndex(columns.bonus);
 export interface OfficialEvent {
   name?: string;
   date: string;
+  shift?: 'Day' | 'Night';
 }
 
 function cellToNumber(value: ExcelJS.CellValue): number {
@@ -47,14 +49,20 @@ function cellToString(value: ExcelJS.CellValue): string | null {
 }
 
 /**
- * Extract the date portion from a header label.
- * Visit headers are "Name - Date", meeting headers are just "Date".
+ * Extract the date+shift key from a header label.
+ * Visit headers are "Name - YYYY-MM-DD (Day)" → "YYYY-MM-DD (Day)"
+ * Meeting headers are just "YYYY-MM-DD" → "YYYY-MM-DD"
  */
-function extractDateFromHeader(header: string | null): string | null {
+function extractDateKeyFromHeader(header: string | null): string | null {
   if (!header) return null;
   const dashIndex = header.lastIndexOf(' - ');
-  const datePart = dashIndex >= 0 ? header.substring(dashIndex + 3).trim() : header.trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(datePart) ? datePart : null;
+  const tail = dashIndex >= 0 ? header.substring(dashIndex + 3).trim() : header.trim();
+  // Match "YYYY-MM-DD" or "YYYY-MM-DD (Day)" / "YYYY-MM-DD (Night)"
+  const match = tail.match(/^(\d{4}-\d{2}-\d{2})(?:\s*\((Day|Night)\))?$/);
+  if (!match) return null;
+  const date = match[1];
+  const shift = match[2];
+  return shift ? `${date} (${shift})` : date;
 }
 
 /**
@@ -70,12 +78,12 @@ function readHeaderDateMap(
 
   const row = sheet.getRow(headerRow);
   for (let i = 0; i < MAX_FIELD_VISITS; i++) {
-    const date = extractDateFromHeader(cellToString(row.getCell(visitsStartCol + i).value));
-    if (date) visits.set(i, date);
+    const key = extractDateKeyFromHeader(cellToString(row.getCell(visitsStartCol + i).value));
+    if (key) visits.set(i, key);
   }
   for (let i = 0; i < MAX_MEETINGS; i++) {
-    const date = extractDateFromHeader(cellToString(row.getCell(meetingsStartCol + i).value));
-    if (date) meetings.set(i, date);
+    const key = extractDateKeyFromHeader(cellToString(row.getCell(meetingsStartCol + i).value));
+    if (key) meetings.set(i, key);
   }
   return { visits, meetings };
 }
@@ -148,6 +156,7 @@ export async function mergeExcelFiles(
   files: File[],
   officialVisits: OfficialEvent[],
   officialMeetings: OfficialEvent[],
+  taskTarget?: number,
 ): Promise<Uint8Array> {
   // 1. Load pristine master template
   const masterUrl = `${new URL(SMMEMBER_TEMPLATE.filePath, window.location.origin).href}?v=${Date.now()}`;
@@ -166,22 +175,23 @@ export async function mergeExcelFiles(
   const masterSheet = masterWb.getWorksheet(SMMEMBER_TEMPLATE.sheetName);
   if (!masterSheet) throw new Error(`Sheet "${SMMEMBER_TEMPLATE.sheetName}" not found in template`);
 
-  // 2. Write official headers to Row 3 of the master
+  // 2. Write official headers to Row 3 of the master (with shift for visits)
   const masterHeaderRow = masterSheet.getRow(headerRow);
-  const masterVisitDateToSlot = new Map<string, number>();
-  const masterMeetingDateToSlot = new Map<string, number>();
+  const masterVisitKeyToSlot = new Map<string, number>();
+  const masterMeetingKeyToSlot = new Map<string, number>();
 
   for (let i = 0; i < officialVisits.length && i < MAX_FIELD_VISITS; i++) {
     const ev = officialVisits[i];
-    const label = ev.name ? `${ev.name} - ${ev.date}` : ev.date;
+    const shift = ev.shift ?? 'Day';
+    const label = ev.name ? `${ev.name} - ${ev.date} (${shift})` : `${ev.date} (${shift})`;
     masterHeaderRow.getCell(visitsStartCol + i).value = label;
-    masterVisitDateToSlot.set(ev.date, i);
+    masterVisitKeyToSlot.set(`${ev.date} (${shift})`, i);
   }
 
   for (let i = 0; i < officialMeetings.length && i < MAX_MEETINGS; i++) {
     const ev = officialMeetings[i];
     masterHeaderRow.getCell(meetingsStartCol + i).value = ev.date;
-    masterMeetingDateToSlot.set(ev.date, i);
+    masterMeetingKeyToSlot.set(ev.date, i);
   }
 
   // 3. Process uploaded files — date-based mapping
@@ -206,10 +216,10 @@ export async function mergeExcelFiles(
     const sourceRows = extractRawRows(wb);
 
     for (const src of sourceRows) {
-      // Remap visit scores: source slot → source date → master slot
+      // Remap visit scores: source slot → source date+key → master slot
       const remappedVisits: (number | null)[] = Array(MAX_FIELD_VISITS).fill(null);
-      for (const [srcSlot, date] of sourceHeaders.visits) {
-        const masterSlot = masterVisitDateToSlot.get(date);
+      for (const [srcSlot, key] of sourceHeaders.visits) {
+        const masterSlot = masterVisitKeyToSlot.get(key);
         if (masterSlot != null && src.visits[srcSlot] != null) {
           remappedVisits[masterSlot] = src.visits[srcSlot];
         }
@@ -217,8 +227,8 @@ export async function mergeExcelFiles(
 
       // Remap meeting scores: source slot → source date → master slot
       const remappedMeetings: (number | null)[] = Array(MAX_MEETINGS).fill(null);
-      for (const [srcSlot, date] of sourceHeaders.meetings) {
-        const masterSlot = masterMeetingDateToSlot.get(date);
+      for (const [srcSlot, key] of sourceHeaders.meetings) {
+        const masterSlot = masterMeetingKeyToSlot.get(key);
         if (masterSlot != null && src.meetings[srcSlot] != null) {
           remappedMeetings[masterSlot] = src.meetings[srcSlot];
         }
@@ -267,7 +277,18 @@ export async function mergeExcelFiles(
     row.getCell(bonusCol).value = data.bonus;
   }
 
-  // 5. Strip cached formula results so Excel recalculates on open
+  // 5. Inject dynamic "Task Target" formula into Column S (Field Visits Total /20)
+  //    Formula: =IFERROR(ROUND(MIN(SUM(D{row}:R{row})/[TARGET], 1)*20, 0), 0)
+  //    This divides the visit score sum by the target (not total columns) and caps at 20.
+  if (taskTarget && taskTarget > 0) {
+    const visitCols = `D${firstDataRow}:R`; // will append row number per row
+    for (let r = firstDataRow; r <= lastDataRow; r++) {
+      const formula = `IFERROR(ROUND(MIN(SUM(D${r}:R${r})/${taskTarget}, 1)*20, 0), 0)`;
+      masterSheet.getRow(r).getCell(visitsCountCol).value = { formula } as ExcelJS.CellFormulaValue;
+    }
+  }
+
+  // 6. Strip cached formula results so Excel recalculates on open
   masterSheet.eachRow((row) => {
     row.eachCell({ includeEmpty: false }, (cell) => {
       if (cell && typeof cell.value === 'object' && cell.value !== null && 'formula' in cell.value) {
