@@ -3,9 +3,9 @@ import type { MetadataRoute } from 'next';
 /** PWA manifest: makes Bello installable on phones/desktops. */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Bello — Member Evaluation',
-    short_name: 'Bello',
-    description: 'Offline-first committee member evaluation, scoring and WhatsApp reporting.',
+    name: 'Social Media — Evaluation Profile',
+    short_name: 'Social Media',
+    description: 'Offline-first Social Media member evaluation, scoring and WhatsApp reporting.',
     start_url: '/',
     display: 'standalone',
     orientation: 'portrait-primary',

@@ -9,7 +9,7 @@ export const APP_CONFIG = {
   /** Human-readable version shown in the link. */
   WHATSAPP_TO_DISPLAY: '+201100572740',
   /** Path (relative to the web root) of the real SMMEMBER template. */
-  TEMPLATE_PATH: '/exel need/SMMEMBER .xlsx',
+  TEMPLATE_PATH: '/Excel Need/SMMEMBER.xlsx',
   /** Filename used for the exported/downloaded workbook. */
-  EXPORT_FILENAME: 'SMMEMBER .xlsx',
+  EXPORT_FILENAME: 'SMMEMBER.xlsx',
 } as const;

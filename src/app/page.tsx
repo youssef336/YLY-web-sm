@@ -175,8 +175,8 @@ export default function HomePage() {
         <div className="flex items-center gap-3">
           <BelloLogo size={46} />
           <div>
-            <h1 className="text-3xl font-black tracking-tight text-white">Bello</h1>
-            <p className="text-sm text-slate-400">Member Evaluation &amp; Tracking</p>
+            <h1 className="text-3xl font-black tracking-tight text-white">Social Media</h1>
+            <p className="text-sm text-slate-400">Evaluation Profile</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -425,7 +425,7 @@ export default function HomePage() {
 
       <footer className="mt-10 flex items-center justify-center gap-2 text-xs text-slate-500">
         <BelloLogo size={18} />
-        <span>Bello &middot; offline-first member evaluation &middot; scores out of 110</span>
+        <span>Social Media &middot; offline-first member evaluation &middot; scores out of 110</span>
       </footer>
     </main>
   );

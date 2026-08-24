@@ -3,9 +3,9 @@ import './globals.css';
 import { ServiceWorkerRegister } from './service-worker-register';
 
 export const metadata: Metadata = {
-  title: 'Bello — Member Evaluation',
+  title: 'Social Media — Evaluation Profile',
   description:
-    'Bello: offline-first committee member evaluation, scoring, strict Excel template injection and WhatsApp reporting.',
+    'Social Media: offline-first member evaluation, scoring, strict Excel template injection and WhatsApp reporting.',
 };
 
 export const viewport: Viewport = {

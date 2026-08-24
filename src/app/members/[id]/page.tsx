@@ -240,7 +240,7 @@ export default function MemberProfilePage() {
             {profile.member.name}
           </h1>
           <p className="text-sm text-slate-400">
-            Evaluation profile &middot; data stays on this device
+            Social Media Evaluation Profile &middot; data stays on this device
           </p>
         </div>
       </header>
@@ -418,7 +418,7 @@ export default function MemberProfilePage() {
 
       <footer className="mt-8 flex items-center justify-center gap-2 text-xs text-slate-500">
         <BelloLogo size={18} />
-        <span>Bello &middot; offline-first member evaluation</span>
+        <span>Social Media &middot; offline-first member evaluation</span>
       </footer>
     </main>
   );

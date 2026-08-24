@@ -449,7 +449,7 @@ export default function LeaderDashboardPage() {
 
       <footer className="mt-10 flex items-center justify-center gap-2 text-xs text-slate-500">
         <BelloLogo size={18} />
-        <span>Bello &middot; offline-first member evaluation</span>
+        <span>Social Media &middot; offline-first member evaluation</span>
       </footer>
     </main>
   );

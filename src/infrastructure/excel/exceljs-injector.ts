@@ -26,7 +26,7 @@ const bonusCol = columnLetterToIndex(columns.bonus);
  * entirely in the browser (offline-first — no server involved).
  *
  * Template fidelity rules:
- *   - Loads the ORIGINAL .xlsx from public/exel need/ via workbook.xlsx.load().
+ *   - Loads the ORIGINAL .xlsx from public/Excel Need/ via workbook.xlsx.load().
  *   - NEVER creates a new workbook or worksheet — modifies the existing one.
  *   - ONLY writes to cells that have actual data to inject.
  *   - NEVER touches formula columns (C, T, S, AJ, AN, AO, AP).
@@ -41,7 +41,7 @@ export class ExceljsInjector implements ExcelGenerator {
   }): Promise<Uint8Array> {
     const { profiles, globalFieldVisits, globalMeetings } = input;
 
-    const templatePath = SMMEMBER_TEMPLATE.filePath;
+    const templatePath = encodeURI(SMMEMBER_TEMPLATE.filePath);
     const cacheBust = new Date().getTime();
     const templateUrl = `${new URL(templatePath, window.location.origin).href}?v=${cacheBust}`;
     let templateBytes: ArrayBuffer;
@@ -58,7 +58,7 @@ export class ExceljsInjector implements ExcelGenerator {
       templateBytes = await res.arrayBuffer();
     } catch (cause) {
       throw new Error(
-        `SMMEMBER template not bundled. Copy "SMMEMBER .xlsx" from the "exel need" folder into public/exel need/ and rebuild.`,
+        `SMMEMBER template not bundled. Place "SMMEMBER.xlsx" at public/Excel Need/SMMEMBER.xlsx and rebuild.`,
         { cause },
       );
     }
