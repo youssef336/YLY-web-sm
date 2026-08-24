@@ -41,7 +41,7 @@ export class ExceljsInjector implements ExcelGenerator {
   }): Promise<Uint8Array> {
     const { profiles, globalFieldVisits, globalMeetings } = input;
 
-    const templatePath = encodeURI(SMMEMBER_TEMPLATE.filePath);
+    const templatePath = SMMEMBER_TEMPLATE.filePath;
     const cacheBust = new Date().getTime();
     const templateUrl = `${new URL(templatePath, window.location.origin).href}?v=${cacheBust}`;
     let templateBytes: ArrayBuffer;
@@ -58,7 +58,7 @@ export class ExceljsInjector implements ExcelGenerator {
       templateBytes = await res.arrayBuffer();
     } catch (cause) {
       throw new Error(
-        `SMMEMBER template not bundled. Place "SMMEMBER.xlsx" at public/Excel Need/SMMEMBER.xlsx and rebuild.`,
+        `SMMEMBER template not bundled. Place "SMMEMBER.xlsx" at public/excel_need/SMMEMBER.xlsx and rebuild.`,
         { cause },
       );
     }

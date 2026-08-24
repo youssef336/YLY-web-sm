@@ -3,7 +3,7 @@
 const CACHE_NAME = 'member-eval-v5';
 const PRECACHE = [
   '/',
-  '/Excel Need/SMMEMBER.xlsx',
+  '/excel_need/SMMEMBER.xlsx',
   '/icon.svg',
   '/manifest.webmanifest',
 ];
@@ -32,7 +32,7 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache the Excel template at runtime — it has cache-busting params
   // and must always come from the network so formula updates take effect.
-  if (request.url.includes('/Excel Need/') && request.url.endsWith('.xlsx')) {
+  if (request.url.includes('/excel_need/') && request.url.endsWith('.xlsx')) {
     event.respondWith(fetch(request));
     return;
   }

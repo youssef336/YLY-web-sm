@@ -160,7 +160,7 @@ export async function mergeExcelFiles(
   taskTarget?: number,
 ): Promise<Uint8Array> {
   // 1. Load pristine master template
-  const masterUrl = `${new URL(encodeURI(SMMEMBER_TEMPLATE.filePath), window.location.origin).href}?v=${Date.now()}`;
+  const masterUrl = `${new URL(SMMEMBER_TEMPLATE.filePath, window.location.origin).href}?v=${Date.now()}`;
   const masterRes = await fetch(masterUrl, {
     cache: 'no-store',
     headers: {
