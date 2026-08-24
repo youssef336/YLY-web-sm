@@ -41,9 +41,7 @@ export class ExceljsInjector implements ExcelGenerator {
   }): Promise<Uint8Array> {
     const { profiles, globalFieldVisits, globalMeetings } = input;
 
-    const templatePath = SMMEMBER_TEMPLATE.filePath;
-    const cacheBust = new Date().getTime();
-    const templateUrl = `${new URL(templatePath, window.location.origin).href}?v=${cacheBust}`;
+    const templateUrl = `${SMMEMBER_TEMPLATE.filePath}?v=${Date.now()}`;
     let templateBytes: ArrayBuffer;
     try {
       const res = await fetch(templateUrl, {
