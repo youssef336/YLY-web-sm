@@ -26,7 +26,7 @@ const bonusCol = columnLetterToIndex(columns.bonus);
  * entirely in the browser (offline-first — no server involved).
  *
  * Template fidelity rules:
- *   - Loads the ORIGINAL .xlsx from public/Excel Need/ via workbook.xlsx.load().
+ *   - Loads the ORIGINAL .xlsx from public/excel_need/ via workbook.xlsx.load().
  *   - NEVER creates a new workbook or worksheet — modifies the existing one.
  *   - ONLY writes to cells that have actual data to inject.
  *   - NEVER touches formula columns (C, T, S, AJ, AN, AO, AP).
