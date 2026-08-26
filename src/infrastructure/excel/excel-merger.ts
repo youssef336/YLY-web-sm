@@ -13,6 +13,7 @@ const technicalCol = columnLetterToIndex(columns.technical);
 const visitsStartCol = columnLetterToIndex(columns.visitsStart);
 const visitsCountCol = columnLetterToIndex(columns.visitsCount);
 const visitsTotalCol = 19; // Column S — Field Visits Total /20
+const meetingsTotalCol = 36; // Column AJ — Meetings Total /10
 const meetingsStartCol = columnLetterToIndex(columns.meetingsStart);
 const interactionCol = columnLetterToIndex(columns.interaction);
 const respectHierarchyCol = columnLetterToIndex(columns.respectHierarchy);
@@ -304,7 +305,14 @@ export async function mergeExcelFiles(
     }
   }
 
-  // 7. Strip cached formula results so Excel recalculates on open
+  // 7. Inject corrected "Meetings Total" formula into Column AJ (ROUND + range)
+  //    Formula: =IFERROR(ROUND(SUM(U{row}:AI{row}) / T{row} * 10, 0), 0)
+  for (let r = firstDataRow; r <= lastDataRow; r++) {
+    const formula = `IFERROR(ROUND(SUM(U${r}:AI${r}) / T${r} * 10, 0), 0)`;
+    masterSheet.getRow(r).getCell(meetingsTotalCol).value = { formula } as ExcelJS.CellFormulaValue;
+  }
+
+  // 8. Strip cached formula results so Excel recalculates on open
   masterSheet.eachRow((row) => {
     row.eachCell({ includeEmpty: false }, (cell) => {
       if (cell && typeof cell.value === 'object' && cell.value !== null && 'formula' in cell.value) {

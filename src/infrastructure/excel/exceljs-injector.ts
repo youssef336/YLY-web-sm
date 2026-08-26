@@ -173,6 +173,9 @@ export class ExceljsInjector implements ExcelGenerator {
       row.getCell(meetingsStartCol + meeting.slot).value = meeting.score;
     }
 
+    // Inject corrected "Meetings Total" formula into Column AJ (ROUND + range)
+    row.getCell('AJ').value = { formula: `IFERROR(ROUND(SUM(U${rowNumber}:AI${rowNumber}) / T${rowNumber} * 10, 0), 0)` } as ExcelJS.CellFormulaValue;
+
     // Category scores (columns AK, AL, AM)
     row.getCell(interactionCol).value = profile.scores?.interaction ?? 0;
     row.getCell(respectHierarchyCol).value = profile.scores?.respectHierarchy ?? 0;
