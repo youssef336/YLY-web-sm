@@ -70,9 +70,9 @@ export class ExceljsInjector implements ExcelGenerator {
     // Strip cached formula results so Excel recalculates on open.
     this.clearCachedFormulaResults(sheet);
 
-    // Build slot → label maps from global events.
-    const visitHeaders = this.buildSlotLabels(profiles, 'fieldVisits', globalFieldVisits);
-    const meetingHeaders = this.buildSlotLabels(profiles, 'meetings', globalMeetings);
+    // Build chronological slot → label maps AND per-member slot reassignment maps.
+    const { labels: visitHeaders, slotMap: visitSlotMap } = this.buildChronologicalMap(profiles, 'fieldVisits', globalFieldVisits);
+    const { labels: meetingHeaders, slotMap: meetingSlotMap } = this.buildChronologicalMap(profiles, 'meetings', globalMeetings);
 
     // Write header labels to row 3 — ONLY slots that have a label.
     this.writeHeaders(sheet, visitHeaders, visitsStartCol, MAX_FIELD_VISITS);
@@ -85,7 +85,7 @@ export class ExceljsInjector implements ExcelGenerator {
     });
 
     sorted.forEach((profile, index) =>
-      this.writeMember(sheet, SMMEMBER_TEMPLATE.firstDataRow + index, profile),
+      this.writeMember(sheet, SMMEMBER_TEMPLATE.firstDataRow + index, profile, visitSlotMap, meetingSlotMap),
     );
 
     // Export the modified workbook — all formatting, merges, styles preserved.
@@ -107,26 +107,70 @@ export class ExceljsInjector implements ExcelGenerator {
     });
   }
 
-  private buildSlotLabels(
+  /**
+   * Build a chronological slot → label map and a per-member slot reassignment map.
+   *
+   * Steps:
+   *  1. Collect ALL unique events across all profiles (with their global event data).
+   *  2. Sort events by date ascending (earliest first).
+   *  3. Assign sequential slot numbers (0, 1, 2, ...) based on sorted order.
+   *  4. Build a mapping from each member's original slot → new chronological slot.
+   *
+   * This ensures Excel columns are always chronological with no gaps, regardless
+   * of the order events were added or how slots were assigned in the database.
+   */
+  private buildChronologicalMap(
     profiles: MemberProfile[],
     kind: 'fieldVisits' | 'meetings',
     globalEvents: GlobalFieldVisit[] | GlobalMeeting[],
-  ): Map<number, string> {
-    const bySlot = new Map<number, string>();
+  ): { labels: Map<number, string>; slotMap: Map<string, Map<number, number>> } {
     const globalMap = new Map(globalEvents.map((e) => [e.id, e]));
+    const labels = new Map<number, string>();
+    const slotMap = new Map<string, Map<number, number>>();
 
+    // Step 1: Collect unique events with their dates.
+    const eventMap = new Map<string, { globalEventId: string; date: string }>();
     for (const profile of profiles) {
       for (const entry of profile[kind]) {
-        const globalEvent = globalMap.get(entry.globalEventId);
-        if (!globalEvent) continue;
-        const label =
-          kind === 'fieldVisits'
-            ? fieldVisitHeaderLabel(globalEvent as GlobalFieldVisit)
-            : meetingHeaderLabel(globalEvent as GlobalMeeting);
-        bySlot.set(entry.slot, label);
+        if (!eventMap.has(entry.globalEventId)) {
+          const global = globalMap.get(entry.globalEventId);
+          if (global) {
+            eventMap.set(entry.globalEventId, { globalEventId: entry.globalEventId, date: global.date });
+          }
+        }
       }
     }
-    return bySlot;
+
+    // Step 2: Sort by date ascending (earliest first).
+    const sortedEvents = [...eventMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
+    // Step 3: Assign sequential slots and build label map.
+    const eventIdToNewSlot = new Map<string, number>();
+    sortedEvents.forEach((event, newSlot) => {
+      eventIdToNewSlot.set(event.globalEventId, newSlot);
+      const global = globalMap.get(event.globalEventId);
+      if (global) {
+        const label =
+          kind === 'fieldVisits'
+            ? fieldVisitHeaderLabel(global as GlobalFieldVisit)
+            : meetingHeaderLabel(global as GlobalMeeting);
+        labels.set(newSlot, label);
+      }
+    });
+
+    // Step 4: Build per-member slot reassignment map (originalSlot → newSlot).
+    for (const profile of profiles) {
+      const memberSlotMap = new Map<number, number>();
+      for (const entry of profile[kind]) {
+        const newSlot = eventIdToNewSlot.get(entry.globalEventId);
+        if (newSlot != null && newSlot !== entry.slot) {
+          memberSlotMap.set(entry.slot, newSlot);
+        }
+      }
+      slotMap.set(profile.member.id, memberSlotMap);
+    }
+
+    return { labels, slotMap };
   }
 
   /**
@@ -148,11 +192,19 @@ export class ExceljsInjector implements ExcelGenerator {
   }
 
   /**
-   * Write a single member's data to their row. ONLY writes to cells that have
-   * actual data — untouched cells preserve the original template formatting.
+   * Write a single member's data to their row. Uses the slot reassignment maps
+   * to write scores to chronological positions (not original database slots).
    */
-  private writeMember(sheet: ExcelJS.Worksheet, rowNumber: number, profile: MemberProfile): void {
+  private writeMember(
+    sheet: ExcelJS.Worksheet,
+    rowNumber: number,
+    profile: MemberProfile,
+    visitSlotMap: Map<string, Map<number, number>>,
+    meetingSlotMap: Map<string, Map<number, number>>,
+  ): void {
     const row = sheet.getRow(rowNumber);
+    const memberVisitSlotMap = visitSlotMap.get(profile.member.id) ?? new Map<number, number>();
+    const memberMeetingSlotMap = meetingSlotMap.get(profile.member.id) ?? new Map<number, number>();
 
     // Name (column A)
     row.getCell(nameCol).value = profile.member.name;
@@ -161,16 +213,18 @@ export class ExceljsInjector implements ExcelGenerator {
     const technical = profile.technical?.score ?? 0;
     row.getCell(technicalCol).value = technical;
 
-    // Field visit scores (columns D..R) — only write slots with data
+    // Field visit scores (columns D..R) — use chronological slot mapping
     for (const visit of profile.fieldVisits) {
-      if (visit.slot >= MAX_FIELD_VISITS) continue;
-      row.getCell(visitsStartCol + visit.slot).value = visit.score;
+      const targetSlot = memberVisitSlotMap.get(visit.slot) ?? visit.slot;
+      if (targetSlot >= MAX_FIELD_VISITS) continue;
+      row.getCell(visitsStartCol + targetSlot).value = visit.score;
     }
 
-    // Meeting scores (columns U..AI) — only write slots with data
+    // Meeting scores (columns U..AI) — use chronological slot mapping
     for (const meeting of profile.meetings) {
-      if (meeting.slot >= MAX_MEETINGS) continue;
-      row.getCell(meetingsStartCol + meeting.slot).value = meeting.score;
+      const targetSlot = memberMeetingSlotMap.get(meeting.slot) ?? meeting.slot;
+      if (targetSlot >= MAX_MEETINGS) continue;
+      row.getCell(meetingsStartCol + targetSlot).value = meeting.score;
     }
 
     // Inject corrected "Meetings Total" formula into Column AJ (ROUND + range)
