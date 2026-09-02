@@ -104,6 +104,15 @@ export class IdbLocalRepository implements LocalMemberRepository {
     return input;
   }
 
+  async updateGlobalFieldVisit(id: string, input: { name: string; date: string; shift: 'Day' | 'Night' }): Promise<GlobalFieldVisit> {
+    const db = await getDb();
+    const existing = await db.get('globalFieldVisits', id);
+    if (!existing) throw new Error('Global field visit not found');
+    const updated: GlobalFieldVisit = { ...existing, ...input };
+    await db.put('globalFieldVisits', updated);
+    return updated;
+  }
+
   async deleteGlobalFieldVisit(id: string): Promise<void> {
     const db = await getDb();
     // Cascade: delete all member entries referencing this global event.
@@ -114,6 +123,7 @@ export class IdbLocalRepository implements LocalMemberRepository {
       if (v.globalEventId === id) await tx.objectStore('fieldVisits').delete(v.id);
     }
     await tx.done;
+    await this.compactSlots('fieldVisits');
   }
 
   async listGlobalMeetings(): Promise<GlobalMeeting[]> {
@@ -127,6 +137,15 @@ export class IdbLocalRepository implements LocalMemberRepository {
     return input;
   }
 
+  async updateGlobalMeeting(id: string, input: { name: string; date: string }): Promise<GlobalMeeting> {
+    const db = await getDb();
+    const existing = await db.get('globalMeetings', id);
+    if (!existing) throw new Error('Global meeting not found');
+    const updated: GlobalMeeting = { ...existing, ...input };
+    await db.put('globalMeetings', updated);
+    return updated;
+  }
+
   async deleteGlobalMeeting(id: string): Promise<void> {
     const db = await getDb();
     const tx = db.transaction(['globalMeetings', 'meetings'], 'readwrite');
@@ -136,6 +155,7 @@ export class IdbLocalRepository implements LocalMemberRepository {
       if (m.globalEventId === id) await tx.objectStore('meetings').delete(m.id);
     }
     await tx.done;
+    await this.compactSlots('meetings');
   }
 
   // ── Member entries (reference global events) ────────────────────────
@@ -165,6 +185,7 @@ export class IdbLocalRepository implements LocalMemberRepository {
   async removeFieldVisit(id: string): Promise<void> {
     const db = await getDb();
     await db.delete('fieldVisits', id);
+    await this.compactSlots('fieldVisits');
   }
 
   async addMeeting(input: { memberId: string; id: string; globalEventId: string; score: MeetingScore }): Promise<Meeting> {
@@ -187,6 +208,7 @@ export class IdbLocalRepository implements LocalMemberRepository {
   async removeMeeting(id: string): Promise<void> {
     const db = await getDb();
     await db.delete('meetings', id);
+    await this.compactSlots('meetings');
   }
 
   async loadProfile(memberId: string): Promise<MemberProfile | null> {
@@ -238,5 +260,28 @@ export class IdbLocalRepository implements LocalMemberRepository {
     }
     const noun = store === 'fieldVisits' ? 'field visits' : 'meetings';
     throw new Error(`Maximum ${maxSlots} ${noun} reached`);
+  }
+
+  /**
+   * Compact slot numbers after deletion so there are no empty gaps.
+   * Collects all remaining entries, identifies which slots are still in use,
+   * sorts them, and reassigns contiguous slot numbers (0, 1, 2, ...).
+   */
+  private async compactSlots(store: 'fieldVisits' | 'meetings'): Promise<void> {
+    const db = await getDb();
+    const all = await db.getAll(store);
+    if (all.length === 0) return;
+
+    const usedSlots = [...new Set(all.map((e) => e.slot))].sort((a, b) => a - b);
+    const slotMap = new Map<number, number>();
+    usedSlots.forEach((oldSlot, i) => slotMap.set(oldSlot, i));
+
+    for (const entry of all) {
+      const newSlot = slotMap.get(entry.slot);
+      if (newSlot != null && newSlot !== entry.slot) {
+        entry.slot = newSlot;
+        await db.put(store, entry);
+      }
+    }
   }
 }

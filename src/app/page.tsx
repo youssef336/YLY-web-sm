@@ -47,6 +47,15 @@ export default function HomePage() {
   const [addingMeeting, setAddingMeeting] = useState(false);
   const [eventsOpen, setEventsOpen] = useState(false);
 
+  // Edit state for global events
+  const [editingVisitId, setEditingVisitId] = useState<string | null>(null);
+  const [editVisitName, setEditVisitName] = useState('');
+  const [editVisitDate, setEditVisitDate] = useState('');
+  const [editVisitShift, setEditVisitShift] = useState<'Day' | 'Night'>('Day');
+  const [editingMeetingId, setEditingMeetingId] = useState<string | null>(null);
+  const [editMeetingName, setEditMeetingName] = useState('');
+  const [editMeetingDate, setEditMeetingDate] = useState('');
+
   const load = useCallback(async () => {
     const [entries, gv, gm] = await Promise.all([
       getContainer().calculateLeaderboard.execute(),
@@ -153,6 +162,50 @@ export default function HomePage() {
       setGlobalMeetings(gm);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete');
+    }
+  }
+
+  function startEditVisit(visit: GlobalFieldVisit): void {
+    setEditingVisitId(visit.id);
+    setEditVisitName(visit.name);
+    setEditVisitDate(visit.date);
+    setEditVisitShift(visit.shift);
+  }
+
+  async function saveEditVisit(): Promise<void> {
+    if (!editingVisitId || !editVisitName.trim() || !editVisitDate) return;
+    try {
+      await getContainer().updateGlobalFieldVisit.execute(editingVisitId, {
+        name: editVisitName.trim(),
+        date: editVisitDate,
+        shift: editVisitShift,
+      });
+      setEditingVisitId(null);
+      const gv = await getContainer().listGlobalFieldVisits.execute();
+      setGlobalVisits(gv);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update field visit');
+    }
+  }
+
+  function startEditMeeting(meeting: GlobalMeeting): void {
+    setEditingMeetingId(meeting.id);
+    setEditMeetingName(meeting.name);
+    setEditMeetingDate(meeting.date);
+  }
+
+  async function saveEditMeeting(): Promise<void> {
+    if (!editingMeetingId || !editMeetingName.trim() || !editMeetingDate) return;
+    try {
+      await getContainer().updateGlobalMeeting.execute(editingMeetingId, {
+        name: editMeetingName.trim(),
+        date: editMeetingDate,
+      });
+      setEditingMeetingId(null);
+      const gm = await getContainer().listGlobalMeetings.execute();
+      setGlobalMeetings(gm);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to update meeting');
     }
   }
 
@@ -308,19 +361,73 @@ export default function HomePage() {
               <div>
                 <h3 className="mb-1.5 text-sm font-semibold text-slate-300">Field Visits</h3>
                 <ul className="space-y-1">
-                  {globalVisits.map((g) => (
-                    <li key={g.id} className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
-                      <span>
-                        <span className="font-medium text-slate-100">{g.name}</span>
-                        <span className="ml-2 text-slate-400">{g.date} ({g.shift})</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void deleteGlobalVisit(g.id)}
-                        className="rounded-lg px-2 py-1 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/15"
-                      >
-                        Delete
-                      </button>
+                  {[...globalVisits]
+                    .sort((a, b) => a.date.localeCompare(b.date))
+                    .map((g) => (
+                    <li key={g.id} className="rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
+                      {editingVisitId === g.id ? (
+                        <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void saveEditVisit(); }}>
+                          <input
+                            className={`${inputBase} min-w-36 flex-1`}
+                            value={editVisitName}
+                            maxLength={100}
+                            required
+                            onChange={(e) => setEditVisitName(e.target.value)}
+                          />
+                          <input
+                            className={inputBase}
+                            type="date"
+                            value={editVisitDate}
+                            required
+                            onChange={(e) => setEditVisitDate(e.target.value)}
+                          />
+                          <select
+                            className={`${inputBase} cursor-pointer`}
+                            value={editVisitShift}
+                            onChange={(e) => setEditVisitShift(e.target.value as 'Day' | 'Night')}
+                          >
+                            <option value="Day">Day</option>
+                            <option value="Night">Night</option>
+                          </select>
+                          <button
+                            type="submit"
+                            disabled={!editVisitName.trim() || !editVisitDate}
+                            className="rounded-lg bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/30"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingVisitId(null)}
+                            className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 transition-colors hover:bg-white/5"
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <span>
+                            <span className="font-medium text-slate-100">{g.name}</span>
+                            <span className="ml-2 text-slate-400">{g.date} ({g.shift})</span>
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => startEditVisit(g)}
+                              className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/10"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void deleteGlobalVisit(g.id)}
+                              className="rounded-lg px-2 py-1 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/15"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -332,19 +439,65 @@ export default function HomePage() {
               <div>
                 <h3 className="mb-1.5 text-sm font-semibold text-slate-300">Meetings</h3>
                 <ul className="space-y-1">
-                  {globalMeetings.map((g) => (
-                    <li key={g.id} className="flex items-center justify-between rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
-                      <span>
-                        <span className="font-medium text-slate-100">{g.name}</span>
-                        <span className="ml-2 text-slate-400">{g.date}</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void deleteGlobalMeeting(g.id)}
-                        className="rounded-lg px-2 py-1 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/15"
-                      >
-                        Delete
-                      </button>
+                  {[...globalMeetings]
+                    .sort((a, b) => a.date.localeCompare(b.date))
+                    .map((g) => (
+                    <li key={g.id} className="rounded-xl bg-slate-950/40 px-3 py-2 text-sm">
+                      {editingMeetingId === g.id ? (
+                        <form className="flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void saveEditMeeting(); }}>
+                          <input
+                            className={`${inputBase} min-w-36 flex-1`}
+                            value={editMeetingName}
+                            maxLength={100}
+                            required
+                            onChange={(e) => setEditMeetingName(e.target.value)}
+                          />
+                          <input
+                            className={inputBase}
+                            type="date"
+                            value={editMeetingDate}
+                            required
+                            onChange={(e) => setEditMeetingDate(e.target.value)}
+                          />
+                          <button
+                            type="submit"
+                            disabled={!editMeetingName.trim() || !editMeetingDate}
+                            className="rounded-lg bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300 transition-colors hover:bg-emerald-500/30"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingMeetingId(null)}
+                            className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-400 transition-colors hover:bg-white/5"
+                          >
+                            Cancel
+                          </button>
+                        </form>
+                      ) : (
+                        <div className="flex items-center justify-between">
+                          <span>
+                            <span className="font-medium text-slate-100">{g.name}</span>
+                            <span className="ml-2 text-slate-400">{g.date}</span>
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => startEditMeeting(g)}
+                              className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/10"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void deleteGlobalMeeting(g.id)}
+                              className="rounded-lg px-2 py-1 text-xs font-semibold text-rose-300 transition-colors hover:bg-rose-500/15"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

@@ -33,10 +33,12 @@ export interface LocalMemberRepository {
   // Global events (independent of members)
   listGlobalFieldVisits(): Promise<GlobalFieldVisit[]>;
   createGlobalFieldVisit(input: GlobalFieldVisit): Promise<GlobalFieldVisit>;
+  updateGlobalFieldVisit(id: string, input: { name: string; date: string; shift: 'Day' | 'Night' }): Promise<GlobalFieldVisit>;
   deleteGlobalFieldVisit(id: string): Promise<void>;
 
   listGlobalMeetings(): Promise<GlobalMeeting[]>;
   createGlobalMeeting(input: GlobalMeeting): Promise<GlobalMeeting>;
+  updateGlobalMeeting(id: string, input: { name: string; date: string }): Promise<GlobalMeeting>;
   deleteGlobalMeeting(id: string): Promise<void>;
 
   // Member entries (reference global events)

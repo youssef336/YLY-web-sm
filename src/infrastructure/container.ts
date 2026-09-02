@@ -15,9 +15,11 @@ import { UpdateTechnicalScoreUseCase } from '@/application/use-cases/update-tech
 import { UpdateCategoryScoresUseCase } from '@/application/use-cases/update-category-scores.use-case';
 import { CreateGlobalFieldVisitUseCase } from '@/application/use-cases/create-global-field-visit.use-case';
 import { ListGlobalFieldVisitsUseCase } from '@/application/use-cases/list-global-field-visits.use-case';
+import { UpdateGlobalFieldVisitUseCase } from '@/application/use-cases/update-global-field-visit.use-case';
 import { DeleteGlobalFieldVisitUseCase } from '@/application/use-cases/delete-global-field-visit.use-case';
 import { CreateGlobalMeetingUseCase } from '@/application/use-cases/create-global-meeting.use-case';
 import { ListGlobalMeetingsUseCase } from '@/application/use-cases/list-global-meetings.use-case';
+import { UpdateGlobalMeetingUseCase } from '@/application/use-cases/update-global-meeting.use-case';
 import { DeleteGlobalMeetingUseCase } from '@/application/use-cases/delete-global-meeting.use-case';
 import { AddFieldVisitUseCase } from '@/application/use-cases/add-field-visit.use-case';
 import { UpdateFieldVisitUseCase } from '@/application/use-cases/update-field-visit.use-case';
@@ -43,9 +45,11 @@ export interface AppContainer {
   updateCategoryScores: UpdateCategoryScoresUseCase;
   createGlobalFieldVisit: CreateGlobalFieldVisitUseCase;
   listGlobalFieldVisits: ListGlobalFieldVisitsUseCase;
+  updateGlobalFieldVisit: UpdateGlobalFieldVisitUseCase;
   deleteGlobalFieldVisit: DeleteGlobalFieldVisitUseCase;
   createGlobalMeeting: CreateGlobalMeetingUseCase;
   listGlobalMeetings: ListGlobalMeetingsUseCase;
+  updateGlobalMeeting: UpdateGlobalMeetingUseCase;
   deleteGlobalMeeting: DeleteGlobalMeetingUseCase;
   addFieldVisit: AddFieldVisitUseCase;
   updateFieldVisit: UpdateFieldVisitUseCase;
@@ -73,9 +77,11 @@ export function createContainer(): AppContainer {
     updateCategoryScores: new UpdateCategoryScoresUseCase(repository),
     createGlobalFieldVisit: new CreateGlobalFieldVisitUseCase(repository),
     listGlobalFieldVisits: new ListGlobalFieldVisitsUseCase(repository),
+    updateGlobalFieldVisit: new UpdateGlobalFieldVisitUseCase(repository),
     deleteGlobalFieldVisit: new DeleteGlobalFieldVisitUseCase(repository),
     createGlobalMeeting: new CreateGlobalMeetingUseCase(repository),
     listGlobalMeetings: new ListGlobalMeetingsUseCase(repository),
+    updateGlobalMeeting: new UpdateGlobalMeetingUseCase(repository),
     deleteGlobalMeeting: new DeleteGlobalMeetingUseCase(repository),
     addFieldVisit: new AddFieldVisitUseCase(repository),
     updateFieldVisit: new UpdateFieldVisitUseCase(repository),

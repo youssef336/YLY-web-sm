@@ -163,12 +163,12 @@ export default function MemberProfilePage() {
 
   const visitGlobalOptions: GlobalEventOption[] = [...globalVisits]
     .filter((gv) => !usedVisitIds.has(gv.id))
-    .sort((a, b) => b.date.localeCompare(a.date))
+    .sort((a, b) => a.date.localeCompare(b.date))
     .map((gv) => ({ id: gv.id, label: `${gv.name} - ${gv.date} (${gv.shift})` }));
 
   const meetingGlobalOptions: GlobalEventOption[] = [...globalMeetings]
     .filter((gm) => !usedMeetingIds.has(gm.id))
-    .sort((a, b) => b.date.localeCompare(a.date))
+    .sort((a, b) => a.date.localeCompare(b.date))
     .map((gm) => ({ id: gm.id, label: `${gm.name} - ${gm.date}` }));
 
   const fieldVisitCallbacks = {

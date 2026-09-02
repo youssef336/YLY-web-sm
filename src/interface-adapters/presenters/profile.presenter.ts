@@ -49,26 +49,30 @@ export function profileToView(
       createdAt: profile.member.createdAt.toISOString(),
     },
     technical: profile.technical?.score ?? 0,
-    fieldVisits: profile.fieldVisits.map((fv) => {
-      const global = globalVisitMap.get(fv.globalEventId);
-      return {
-        id: fv.id,
-        globalEventId: fv.globalEventId,
-        name: global?.name ?? '(deleted event)',
-        date: global?.date ?? '',
-        score: fv.score,
-      };
-    }),
-    meetings: profile.meetings.map((m) => {
-      const global = globalMeetingMap.get(m.globalEventId);
-      return {
-        id: m.id,
-        globalEventId: m.globalEventId,
-        name: global?.name ?? '(deleted event)',
-        date: global?.date ?? '',
-        score: m.score,
-      };
-    }),
+    fieldVisits: profile.fieldVisits
+      .map((fv) => {
+        const global = globalVisitMap.get(fv.globalEventId);
+        return {
+          id: fv.id,
+          globalEventId: fv.globalEventId,
+          name: global?.name ?? '(deleted event)',
+          date: global?.date ?? '',
+          score: fv.score,
+        };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    meetings: profile.meetings
+      .map((m) => {
+        const global = globalMeetingMap.get(m.globalEventId);
+        return {
+          id: m.id,
+          globalEventId: m.globalEventId,
+          name: global?.name ?? '(deleted event)',
+          date: global?.date ?? '',
+          score: m.score,
+        };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date)),
     scores: {
       interaction: profile.scores?.interaction ?? 0,
       respectHierarchy: profile.scores?.respectHierarchy ?? 0,
