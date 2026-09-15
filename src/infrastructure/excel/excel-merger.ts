@@ -253,7 +253,9 @@ export async function mergeExcelFiles(
 
     for (const src of sourceRows) {
       // Remap visit scores: source slot → normalized name → master slot.
-      const remappedVisits: (number | null)[] = Array(MAX_FIELD_VISITS).fill(null);
+      const remappedVisits: (number | null)[] = sourceHeaders.visits.size === 0
+        ? [...src.visits]
+        : Array(MAX_FIELD_VISITS).fill(null);
       for (const [srcSlot, name] of sourceHeaders.visits) {
         const masterSlot = masterVisitNameToSlot.get(name) ??
           (masterHeaderRow.getCell(visitsStartCol + srcSlot).value ? srcSlot : undefined);
@@ -263,7 +265,9 @@ export async function mergeExcelFiles(
       }
 
       // Remap meeting scores: source slot → normalized name → master slot.
-      const remappedMeetings: (number | null)[] = Array(MAX_MEETINGS).fill(null);
+      const remappedMeetings: (number | null)[] = sourceHeaders.meetings.size === 0
+        ? [...src.meetings]
+        : Array(MAX_MEETINGS).fill(null);
       for (const [srcSlot, name] of sourceHeaders.meetings) {
         const masterSlot = masterMeetingNameToSlot.get(name) ??
           (masterHeaderRow.getCell(meetingsStartCol + srcSlot).value ? srcSlot : undefined);

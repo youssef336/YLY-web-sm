@@ -1,6 +1,6 @@
 /* Offline-first service worker: cache app shell + bundled template, serve
    from cache when the network is unavailable. */
-const CACHE_NAME = 'member-eval-v5';
+const CACHE_NAME = 'member-eval-v6';
 const PRECACHE = [
   '/',
   '/excel_need/SMMEMBER.xlsx',
