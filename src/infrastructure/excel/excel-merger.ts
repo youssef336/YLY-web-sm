@@ -70,8 +70,11 @@ function getEvaluationSheet(workbook: ExcelJS.Workbook): ExcelJS.Worksheet | und
 export function normalizeEventName(value: string): string {
   return value
     .normalize('NFC')
+    .replace(/[ًٌٍَُِّْـ]/g, '')
     .replace(/[أإآ]/g, 'ا')
     .replace(/ة/g, 'ه')
+    .replace(/ى/g, 'ي')
+    .replace(/مارثون/g, 'ماراثون')
     .replace(/ي(?![\p{L}\p{N}])/gu, 'ى')
     .replace(/\s+/g, ' ')
     .trim()
@@ -82,8 +85,8 @@ export function normalizeEventName(value: string): string {
 function extractEventNameFromHeader(header: string | null): string | null {
   if (!header) return null;
   const text = header.replace(/\s+/g, ' ').trim();
-  const isoDateSuffix = /\s+-\s+\d{4}-\d{2}-\d{2}(?:\s*\((?:Day|Night)\))?$/;
-  const shortDateSuffix = /\s+(?:يوم\s+)?\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/u;
+  const isoDateSuffix = /\s+-\s+\d{4}-\d{2}-\d{2}(?:\s*\((?:Day|Night)\))?$/i;
+  const shortDateSuffix = /(?:\s*[-–]?\s*)(?:يوم\s+)?\d{1,2}[\u002F\\-]\d{1,2}(?:[\u002F\\-]\d{2,4})?$/u;
   const name = text.replace(isoDateSuffix, '').replace(shortDateSuffix, '').trim();
   return name ? normalizeEventName(name) : null;
 }
@@ -252,7 +255,8 @@ export async function mergeExcelFiles(
       // Remap visit scores: source slot → normalized name → master slot.
       const remappedVisits: (number | null)[] = Array(MAX_FIELD_VISITS).fill(null);
       for (const [srcSlot, name] of sourceHeaders.visits) {
-        const masterSlot = masterVisitNameToSlot.get(name);
+        const masterSlot = masterVisitNameToSlot.get(name) ??
+          (masterHeaderRow.getCell(visitsStartCol + srcSlot).value ? srcSlot : undefined);
         if (masterSlot != null && src.visits[srcSlot] != null) {
           remappedVisits[masterSlot] = src.visits[srcSlot];
         }
@@ -261,7 +265,8 @@ export async function mergeExcelFiles(
       // Remap meeting scores: source slot → normalized name → master slot.
       const remappedMeetings: (number | null)[] = Array(MAX_MEETINGS).fill(null);
       for (const [srcSlot, name] of sourceHeaders.meetings) {
-        const masterSlot = masterMeetingNameToSlot.get(name);
+        const masterSlot = masterMeetingNameToSlot.get(name) ??
+          (masterHeaderRow.getCell(meetingsStartCol + srcSlot).value ? srcSlot : undefined);
         if (masterSlot != null && src.meetings[srcSlot] != null) {
           remappedMeetings[masterSlot] = src.meetings[srcSlot];
         }
