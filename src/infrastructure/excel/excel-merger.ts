@@ -50,6 +50,22 @@ function cellToString(value: ExcelJS.CellValue): string | null {
   return null;
 }
 
+function getEvaluationSheet(workbook: ExcelJS.Workbook): ExcelJS.Worksheet | undefined {
+  const exact = workbook.getWorksheet(SMMEMBER_TEMPLATE.sheetName);
+  if (exact) return exact;
+
+  const normalizeSheetName = (name: string) => name.replace(/[\s_-]+/g, '').toLocaleLowerCase();
+  const expectedName = normalizeSheetName(SMMEMBER_TEMPLATE.sheetName);
+  const byName = workbook.worksheets.find((sheet) => normalizeSheetName(sheet.name) === expectedName);
+  if (byName) return byName;
+
+  return workbook.worksheets.find((sheet) => {
+    const row3Name = cellToString(sheet.getRow(3).getCell(nameCol).value);
+    const row4Name = cellToString(sheet.getRow(4).getCell(nameCol).value);
+    return row3Name?.toLocaleLowerCase() === 'gov name' && row4Name?.toLocaleLowerCase() === 'name';
+  });
+}
+
 /** Normalize Arabic spelling variants and whitespace for event-name matching. */
 export function normalizeEventName(value: string): string {
   return value
@@ -65,20 +81,18 @@ export function normalizeEventName(value: string): string {
 /** Extract the event name from a Row 3 header, deliberately ignoring its date and shift. */
 function extractEventNameFromHeader(header: string | null): string | null {
   if (!header) return null;
-  const dashIndex = header.lastIndexOf(' - ');
-  if (dashIndex < 0) return null;
-
-  const tail = header.substring(dashIndex + 3).trim();
-  if (!/^\d{4}-\d{2}-\d{2}(?:\s*\((?:Day|Night)\))?$/.test(tail)) return null;
-
-  return normalizeEventName(header.substring(0, dashIndex));
+  const text = header.replace(/\s+/g, ' ').trim();
+  const isoDateSuffix = /\s+-\s+\d{4}-\d{2}-\d{2}(?:\s*\((?:Day|Night)\))?$/;
+  const shortDateSuffix = /\s+(?:يوم\s+)?\d{1,2}[/-]\d{1,2}(?:[/-]\d{2,4})?$/u;
+  const name = text.replace(isoDateSuffix, '').replace(shortDateSuffix, '').trim();
+  return name ? normalizeEventName(name) : null;
 }
 
 /** Read Row 3 and return source slot→normalized event-name maps. */
 function readHeaderNameMap(
   workbook: ExcelJS.Workbook,
 ): { visits: Map<number, string>; meetings: Map<number, string> } {
-  const sheet = workbook.getWorksheet(SMMEMBER_TEMPLATE.sheetName);
+  const sheet = getEvaluationSheet(workbook);
   const visits = new Map<number, string>();
   const meetings = new Map<number, string>();
   if (!sheet) return { visits, meetings };
@@ -108,7 +122,7 @@ function extractRawRows(workbook: ExcelJS.Workbook): {
   respectHierarchy: number;
   bonus: number;
 }[] {
-  const sheet = workbook.getWorksheet(SMMEMBER_TEMPLATE.sheetName);
+  const sheet = getEvaluationSheet(workbook);
   if (!sheet) return [];
 
   const rows: {
