@@ -50,27 +50,32 @@ function cellToString(value: ExcelJS.CellValue): string | null {
   return null;
 }
 
-/**
- * Extract the date+shift key from a header label.
- * Visit headers are "Name - YYYY-MM-DD (Day)" → "YYYY-MM-DD (Day)"
- * Meeting headers are just "YYYY-MM-DD" → "YYYY-MM-DD"
- */
-function extractDateKeyFromHeader(header: string | null): string | null {
-  if (!header) return null;
-  const dashIndex = header.lastIndexOf(' - ');
-  const tail = dashIndex >= 0 ? header.substring(dashIndex + 3).trim() : header.trim();
-  // Match "YYYY-MM-DD" or "YYYY-MM-DD (Day)" / "YYYY-MM-DD (Night)"
-  const match = tail.match(/^(\d{4}-\d{2}-\d{2})(?:\s*\((Day|Night)\))?$/);
-  if (!match) return null;
-  const date = match[1];
-  const shift = match[2];
-  return shift ? `${date} (${shift})` : date;
+/** Normalize Arabic spelling variants and whitespace for event-name matching. */
+export function normalizeEventName(value: string): string {
+  return value
+    .normalize('NFC')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ة/g, 'ه')
+    .replace(/ي(?![\p{L}\p{N}])/gu, 'ى')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
 }
 
-/**
- * Read Row 3 of a workbook and return a slot→date map for visits and meetings.
- */
-function readHeaderDateMap(
+/** Extract the event name from a Row 3 header, deliberately ignoring its date and shift. */
+function extractEventNameFromHeader(header: string | null): string | null {
+  if (!header) return null;
+  const dashIndex = header.lastIndexOf(' - ');
+  if (dashIndex < 0) return null;
+
+  const tail = header.substring(dashIndex + 3).trim();
+  if (!/^\d{4}-\d{2}-\d{2}(?:\s*\((?:Day|Night)\))?$/.test(tail)) return null;
+
+  return normalizeEventName(header.substring(0, dashIndex));
+}
+
+/** Read Row 3 and return source slot→normalized event-name maps. */
+function readHeaderNameMap(
   workbook: ExcelJS.Workbook,
 ): { visits: Map<number, string>; meetings: Map<number, string> } {
   const sheet = workbook.getWorksheet(SMMEMBER_TEMPLATE.sheetName);
@@ -80,19 +85,19 @@ function readHeaderDateMap(
 
   const row = sheet.getRow(headerRow);
   for (let i = 0; i < MAX_FIELD_VISITS; i++) {
-    const key = extractDateKeyFromHeader(cellToString(row.getCell(visitsStartCol + i).value));
-    if (key) visits.set(i, key);
+    const name = extractEventNameFromHeader(cellToString(row.getCell(visitsStartCol + i).value));
+    if (name) visits.set(i, name);
   }
   for (let i = 0; i < MAX_MEETINGS; i++) {
-    const key = extractDateKeyFromHeader(cellToString(row.getCell(meetingsStartCol + i).value));
-    if (key) meetings.set(i, key);
+    const name = extractEventNameFromHeader(cellToString(row.getCell(meetingsStartCol + i).value));
+    if (name) meetings.set(i, name);
   }
   return { visits, meetings };
 }
 
 /**
  * Read all member data rows from a workbook. Returns raw row data with scores
- * in their original slot positions (for date-based remapping later).
+ * in their original slot positions for remapping later.
  */
 function extractRawRows(workbook: ExcelJS.Workbook): {
   name: string;
@@ -151,8 +156,8 @@ function extractRawRows(workbook: ExcelJS.Workbook): {
  * Merge multiple uploaded .xlsx files into a single master template.
  *
  * The leader defines "official" events (field visits + meetings) which become
- * the master Row 3 headers. Uploaded files are mapped to the master via DATE
- * matching — sub-leader event names are ignored, only dates matter.
+ * the master Row 3 headers. Uploaded files are mapped to the master by
+ * normalized event name; dates and shifts are ignored.
  */
 export async function mergeExcelFiles(
   files: File[],
@@ -179,15 +184,21 @@ export async function mergeExcelFiles(
 
   // 2. Write official headers to Row 3 of the master (with shift for visits)
   const masterHeaderRow = masterSheet.getRow(headerRow);
-  const masterVisitKeyToSlot = new Map<string, number>();
-  const masterMeetingKeyToSlot = new Map<string, number>();
+  const masterVisitNameToSlot = new Map<string, number>();
+  const masterMeetingNameToSlot = new Map<string, number>();
 
   for (let i = 0; i < officialVisits.length && i < MAX_FIELD_VISITS; i++) {
     const ev = officialVisits[i];
     const shift = ev.shift ?? 'Day';
     const label = ev.name ? `${ev.name} - ${ev.date} (${shift})` : `${ev.date} (${shift})`;
     masterHeaderRow.getCell(visitsStartCol + i).value = label;
-    masterVisitKeyToSlot.set(`${ev.date} (${shift})`, i);
+    const normalizedName = ev.name ? normalizeEventName(ev.name) : '';
+    if (normalizedName) {
+      if (masterVisitNameToSlot.has(normalizedName)) {
+        throw new Error(`Duplicate official field visit name: "${ev.name}". Names must be unique.`);
+      }
+      masterVisitNameToSlot.set(normalizedName, i);
+    }
   }
 
   for (let i = 0; i < officialMeetings.length && i < MAX_MEETINGS; i++) {
@@ -195,10 +206,14 @@ export async function mergeExcelFiles(
     const name = ev.name ?? 'Meeting';
     const label = `${name} - ${ev.date}`;
     masterHeaderRow.getCell(meetingsStartCol + i).value = label;
-    masterMeetingKeyToSlot.set(ev.date, i);
+    const normalizedName = normalizeEventName(name);
+    if (masterMeetingNameToSlot.has(normalizedName)) {
+      throw new Error(`Duplicate official meeting name: "${ev.name ?? name}". Names must be unique.`);
+    }
+    masterMeetingNameToSlot.set(normalizedName, i);
   }
 
-  // 3. Process uploaded files — date-based mapping
+  // 3. Process uploaded files — normalized name-based mapping
   const allRemappedRows: {
     name: string;
     technical: number;
@@ -214,25 +229,25 @@ export async function mergeExcelFiles(
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
 
-    // Read the source file's Row 3 to get date→slot mapping
-    const sourceHeaders = readHeaderDateMap(wb);
+    // Read the source file's Row 3 to get normalized event-name→slot mappings.
+    const sourceHeaders = readHeaderNameMap(wb);
     // Read all member rows
     const sourceRows = extractRawRows(wb);
 
     for (const src of sourceRows) {
-      // Remap visit scores: source slot → source date+key → master slot
+      // Remap visit scores: source slot → normalized name → master slot.
       const remappedVisits: (number | null)[] = Array(MAX_FIELD_VISITS).fill(null);
-      for (const [srcSlot, key] of sourceHeaders.visits) {
-        const masterSlot = masterVisitKeyToSlot.get(key);
+      for (const [srcSlot, name] of sourceHeaders.visits) {
+        const masterSlot = masterVisitNameToSlot.get(name);
         if (masterSlot != null && src.visits[srcSlot] != null) {
           remappedVisits[masterSlot] = src.visits[srcSlot];
         }
       }
 
-      // Remap meeting scores: source slot → source date → master slot
+      // Remap meeting scores: source slot → normalized name → master slot.
       const remappedMeetings: (number | null)[] = Array(MAX_MEETINGS).fill(null);
-      for (const [srcSlot, key] of sourceHeaders.meetings) {
-        const masterSlot = masterMeetingKeyToSlot.get(key);
+      for (const [srcSlot, name] of sourceHeaders.meetings) {
+        const masterSlot = masterMeetingNameToSlot.get(name);
         if (masterSlot != null && src.meetings[srcSlot] != null) {
           remappedMeetings[masterSlot] = src.meetings[srcSlot];
         }

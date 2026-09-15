@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type DragEvent, type ChangeEvent } from 'react';
 import Link from 'next/link';
 import { BelloLogo } from '@/components/bello-logo';
-import { mergeExcelFiles, type OfficialEvent } from '@/infrastructure/excel/excel-merger';
+import { mergeExcelFiles, normalizeEventName, type OfficialEvent } from '@/infrastructure/excel/excel-merger';
 
 const inputBase =
   'rounded-xl border border-white/10 bg-slate-950/60 px-3 py-2 text-sm text-slate-100 outline-none transition-colors placeholder:text-slate-500 focus:border-violet-400/60 disabled:cursor-not-allowed disabled:opacity-50';
@@ -114,8 +114,8 @@ export default function LeaderDashboardPage() {
   function addVisit(e: FormEvent): void {
     e.preventDefault();
     if (!visitName.trim() || !visitDate) return;
-    if (officialVisits.some((v) => v.date === visitDate && v.shift === visitShift)) {
-      setError('A field visit for this date and shift already exists.');
+    if (officialVisits.some((v) => normalizeEventName(v.name ?? '') === normalizeEventName(visitName))) {
+      setError('A field visit with this name already exists. Event names must be unique.');
       return;
     }
     setOfficialVisits((prev) => [...prev, { name: visitName.trim(), date: visitDate, shift: visitShift }]);
@@ -132,8 +132,8 @@ export default function LeaderDashboardPage() {
   function addMeeting(e: FormEvent): void {
     e.preventDefault();
     if (!meetingName.trim() || !meetingDate) return;
-    if (officialMeetings.some((m) => m.date === meetingDate && m.name === meetingName.trim())) {
-      setError('This meeting name and date already exists.');
+    if (officialMeetings.some((m) => normalizeEventName(m.name ?? '') === normalizeEventName(meetingName))) {
+      setError('A meeting with this name already exists. Event names must be unique.');
       return;
     }
     setOfficialMeetings((prev) => [...prev, { name: meetingName.trim(), date: meetingDate }]);
@@ -206,7 +206,7 @@ export default function LeaderDashboardPage() {
       <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
         <h2 className="mb-1 text-lg font-bold text-white">Step 1: Define Official Events</h2>
         <p className="mb-4 text-sm text-slate-400">
-          These become the master column headers. Sub-leader data is mapped by matching dates.
+          These become the master column headers. Uploaded data is mapped by normalized event name.
         </p>
 
         {/* Official Field Visits */}
@@ -354,7 +354,7 @@ export default function LeaderDashboardPage() {
           {dragging ? 'Drop files here' : 'Step 2: Drag & drop .xlsx files or click to browse'}
         </p>
         <p className="mt-1 text-xs text-slate-500">
-          Upload exports from sub-leaders — scores are mapped by date to your official events
+          Upload exports from sub-leaders — scores are mapped by normalized name to your official events
         </p>
       </section>
 
@@ -438,7 +438,7 @@ export default function LeaderDashboardPage() {
           </li>
           <li className="flex gap-2">
             <span className="font-bold text-violet-400">3.</span>
-            The system reads each file&apos;s Row 3 dates and maps scores to the matching master columns — sub-leader event names are ignored.
+            The system reads each file&apos;s Row 3 event names, normalizes Arabic spelling variants, and maps scores to the matching master columns. Dates are ignored.
           </li>
           <li className="flex gap-2">
             <span className="font-bold text-violet-400">4.</span>
