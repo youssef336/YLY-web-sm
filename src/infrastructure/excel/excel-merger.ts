@@ -12,6 +12,7 @@ const nameCol = columnLetterToIndex(columns.name);
 const technicalCol = columnLetterToIndex(columns.technical);
 const visitsStartCol = columnLetterToIndex(columns.visitsStart);
 const visitsCountCol = columnLetterToIndex(columns.visitsCount);
+const meetingsCountCol = columnLetterToIndex(columns.meetingsCount);
 const visitsTotalCol = 19; // Column S — Field Visits Total /20
 const meetingsTotalCol = 36; // Column AJ — Meetings Total /10
 const meetingsStartCol = columnLetterToIndex(columns.meetingsStart);
@@ -180,7 +181,8 @@ export async function mergeExcelFiles(
   files: File[],
   officialVisits: OfficialEvent[],
   officialMeetings: OfficialEvent[],
-  taskTarget?: number,
+  visitTarget?: number,
+  meetingTarget?: number,
 ): Promise<Uint8Array> {
   // 1. Load pristine master template
   const masterUrl = `${SMMEMBER_TEMPLATE.filePath}?v=${Date.now()}`;
@@ -322,7 +324,7 @@ export async function mergeExcelFiles(
   // 5. Force-inject the monthly target into Column C ("Field Visits Entered") for
   //    EVERY data row. This overwrites the template's =COUNTA(...) formula so it
   //    shows the leader's target number, not a formula result.
-  const targetNumber = Number(taskTarget) || 3;
+  const targetNumber = Number(visitTarget) || 3;
   for (let r = firstDataRow; r <= lastDataRow; r++) {
     const row = masterSheet.getRow(r);
     const cell = row.getCell(visitsCountCol);
@@ -336,17 +338,20 @@ export async function mergeExcelFiles(
 
   // 6. Inject dynamic "Task Target" formula into Column S (Field Visits Total /20)
   //    Formula: =IFERROR(ROUND(MIN(SUM(D{row}:R{row})/[TARGET], 1)*20, 0), 0)
-  if (taskTarget && taskTarget > 0) {
+  if (visitTarget && visitTarget > 0) {
     for (let r = firstDataRow; r <= lastDataRow; r++) {
-      const formula = `IFERROR(ROUND(MIN(SUM(D${r}:R${r})/${taskTarget}, 1)*20, 0), 0)`;
+      const formula = `IFERROR(ROUND(MIN(SUM(D${r}:R${r})/${visitTarget}, 1)*20, 0), 0)`;
       masterSheet.getRow(r).getCell(visitsTotalCol).value = { formula } as ExcelJS.CellFormulaValue;
     }
   }
 
-  // 7. Inject corrected "Meetings Total" formula into Column AJ (ROUND + range)
-  //    Formula: =IFERROR(ROUND(SUM(U{row}:AI{row}) / T{row} * 10, 0), 0)
+  // 7. Inject the monthly meeting target into Column T and calculate Column AJ
+  //    against that target instead of the number of configured headers.
+  const meetingTargetNumber = Number(meetingTarget) || 3;
   for (let r = firstDataRow; r <= lastDataRow; r++) {
-    const formula = `IFERROR(ROUND(SUM(U${r}:AI${r}) / T${r} * 10, 0), 0)`;
+    const targetCell = masterSheet.getRow(r).getCell(meetingsCountCol);
+    targetCell.value = meetingTargetNumber;
+    const formula = `IFERROR(ROUND(MIN(SUM(U${r}:AI${r})/${meetingTargetNumber}, 1)*10, 0), 0)`;
     masterSheet.getRow(r).getCell(meetingsTotalCol).value = { formula } as ExcelJS.CellFormulaValue;
   }
 

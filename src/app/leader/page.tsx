@@ -18,10 +18,10 @@ function loadOfficialEvents(key: string): OfficialEvent[] {
   }
 }
 
-function loadTaskTarget(): number {
+function loadTarget(key: string, legacyKey?: string): number {
   if (typeof window === 'undefined') return 3;
   try {
-    const raw = localStorage.getItem('bello_task_target');
+    const raw = localStorage.getItem(key) ?? (legacyKey ? localStorage.getItem(legacyKey) : null);
     if (raw !== null) {
       const n = Number(raw);
       if (Number.isFinite(n) && n > 0) return n;
@@ -45,13 +45,15 @@ export default function LeaderDashboardPage() {
   const [visitShift, setVisitShift] = useState<'Day' | 'Night'>('Day');
   const [meetingName, setMeetingName] = useState('');
   const [meetingDate, setMeetingDate] = useState('');
-  const [taskTarget, setTaskTarget] = useState(3);
+  const [visitTarget, setVisitTarget] = useState(3);
+  const [meetingTarget, setMeetingTarget] = useState(3);
 
   // Hydrate from localStorage
   useEffect(() => {
     setOfficialVisits(loadOfficialEvents('bellο_official_visits'));
     setOfficialMeetings(loadOfficialEvents('bello_official_meetings'));
-    setTaskTarget(loadTaskTarget());
+    setVisitTarget(loadTarget('bello_visit_target', 'bello_task_target'));
+    setMeetingTarget(loadTarget('bello_meeting_target'));
   }, []);
 
   // Persist officialVisits
@@ -64,10 +66,15 @@ export default function LeaderDashboardPage() {
     localStorage.setItem('bello_official_meetings', JSON.stringify(officialMeetings));
   }, [officialMeetings]);
 
-  // Persist taskTarget
+  // Persist monthly targets
   useEffect(() => {
-    localStorage.setItem('bello_task_target', String(taskTarget));
-  }, [taskTarget]);
+    localStorage.setItem('bello_visit_target', String(visitTarget));
+    localStorage.setItem('bello_task_target', String(visitTarget));
+  }, [visitTarget]);
+
+  useEffect(() => {
+    localStorage.setItem('bello_meeting_target', String(meetingTarget));
+  }, [meetingTarget]);
 
   const accept = '.xlsx,.xls';
 
@@ -157,7 +164,13 @@ export default function LeaderDashboardPage() {
     setError(null);
     setResult(null);
     try {
-      const mergedBytes = await mergeExcelFiles(files, officialVisits, officialMeetings, taskTarget);
+      const mergedBytes = await mergeExcelFiles(
+        files,
+        officialVisits,
+        officialMeetings,
+        visitTarget,
+        meetingTarget,
+      );
 
       const blob = new Blob([new Uint8Array(mergedBytes)], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -177,7 +190,7 @@ export default function LeaderDashboardPage() {
     } finally {
       setProcessing(false);
     }
-  }, [files, officialVisits, officialMeetings, taskTarget]);
+  }, [files, officialVisits, officialMeetings, visitTarget, meetingTarget]);
 
   return (
     <main className="animate-bello-in mx-auto w-full max-w-4xl px-4 pb-24 pt-8 sm:px-6">
@@ -313,19 +326,34 @@ export default function LeaderDashboardPage() {
           )}
         </div>
 
-        {/* Monthly Target */}
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-slate-300">Monthly Target Field Visits</h3>
-          <input
-            className={inputBase}
-            type="number"
-            min={1}
-            value={taskTarget}
-            onChange={(e) => {
-              const n = Number(e.target.value);
-              if (Number.isFinite(n) && n > 0) setTaskTarget(n);
-            }}
-          />
+        {/* Monthly Targets */}
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-300">Monthly Target Field Visits</h3>
+            <input
+              className={inputBase}
+              type="number"
+              min={1}
+              value={visitTarget}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n) && n > 0) setVisitTarget(n);
+              }}
+            />
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-semibold text-slate-300">Monthly Target Meetings</h3>
+            <input
+              className={inputBase}
+              type="number"
+              min={1}
+              value={meetingTarget}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isFinite(n) && n > 0) setMeetingTarget(n);
+              }}
+            />
+          </div>
         </div>
       </section>
 
